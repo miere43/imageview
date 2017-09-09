@@ -1,0 +1,6 @@
+*.VC.db
+*.vcxproj.user
+*.vcxproj.filters
+src/ImageView/Debug
+src/ImageView/Release
+*.suo
