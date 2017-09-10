@@ -12,7 +12,7 @@ Simple application to view images for OS Windows.
 * PNG
 * TIFF
 * WMP
-* Dds
+* DDS
 
 ## Requirements
 * Windows 7 or Windows 8 or Windows 10

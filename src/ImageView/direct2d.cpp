@@ -1,4 +1,4 @@
-#include "painter_direct2d.hpp"
+#include "direct2d.hpp"
 
 bool Direct2D::initialize(HWND hwnd)
 {

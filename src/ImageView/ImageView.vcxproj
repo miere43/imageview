@@ -88,6 +88,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;USE_DIRECT2D_PAINTER;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -116,6 +117,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;USE_DIRECT2D_PAINTER;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -143,15 +145,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="painter_direct2d.cpp" />
+    <ClCompile Include="direct2d.cpp" />
+    <ClCompile Include="settings.cpp" />
+    <ClCompile Include="variant.cpp" />
     <ClCompile Include="view_window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="error.hpp" />
     <ClInclude Include="math.hpp" />
-    <ClInclude Include="painter.hpp" />
-    <ClInclude Include="painter_direct2d.hpp" />
+    <ClInclude Include="direct2d.hpp" />
+    <ClInclude Include="settings.hpp" />
+    <ClInclude Include="variant.hpp" />
     <ClInclude Include="view_window.hpp" />
+    <ClInclude Include="wic.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

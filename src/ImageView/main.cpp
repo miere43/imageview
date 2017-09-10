@@ -4,9 +4,8 @@
 /*
 	
 	TODO:
-
 	- be DPI aware
-
+	- switch to spaces
 
 */
 
@@ -26,19 +25,6 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
 	if (FAILED(hr))
 		return false;
 
-	IWICBitmapDecoder* decoder;
-	hr = wic_factory->CreateDecoderFromFilename(L"D:/Vlad/Pictures/15047665988060.jpg", nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
-	if (FAILED(hr))
-		return false;
-
-	UINT count;
-	hr = decoder->GetFrameCount(&count);
-	if (FAILED(hr))
-		return false;
-
-	IWICBitmapFrameDecode* frame;
-	decoder->GetFrame(0, &frame);
-
 	View_Window_Init_Params params;
 	params.hInstance = hInstance;
 	params.lpCmdLine = lpCmdLine;
@@ -48,16 +34,11 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
 	params.show_after_entering_event_loop = true;
 
 	View_Window view;
-	if (!view.init(params))
+	if (!view.initialize(params))
 		return 1;
 
-	view.set_file_name(L"lol", 3);
-	view.set_current_image(frame);
-
-	if (frame)
-		frame->Release();
-	if (decoder)
-		decoder->Release();
+	//view.set_file_name(L"lol", 3);
+	//view.set_current_image(frame);
 
 	return view.enter_message_loop();
 }

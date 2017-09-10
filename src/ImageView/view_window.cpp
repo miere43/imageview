@@ -1,16 +1,27 @@
 #include "view_window.hpp"
 #include <Windows.h>
-
+#include <windowsx.h>
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+enum class View_Window_Message : UINT
+{
+	Show_After_Entering_Event_Loop = WM_USER + 1,
+};
 
-bool View_Window::init(const View_Window_Init_Params& params)
+enum class View_Menu_Item : int
+{
+	None = 0,
+	Open_File = 1
+};
+
+bool View_Window::initialize(const View_Window_Init_Params& params)
 {
 	if (initialized)
 		return true;
 
 	HINSTANCE hInstance = GetModuleHandleW(0);
+	HRESULT hr = 0;
 
 	ATOM atom = 0;
 	{
@@ -107,23 +118,23 @@ bool View_Window::init(const View_Window_Init_Params& params)
 	if (hwnd == 0)
 		return false;
 
-	//if (!image_loader.init())
-	//	return false;
-
 	if (!direct2d.initialize(hwnd))
 		return false;
 
 	SetLastError(0);
 	LONG_PTR old = SetWindowLongPtrW(hwnd, 0, (LONG_PTR)this);
 	if (GetLastError() != 0)
-		__debugbreak();
+		return false;
+
+	// Create view menu
+	view_menu = CreatePopupMenu();
+	AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Open_File, L"Open...");
 
 	UpdateWindow(hwnd);
 
 	if (params.show_after_entering_event_loop)
 	{
-		// All other SW_* causes window to show before erasing background which leads to flickering.
-		ShowWindow(hwnd, SW_SHOW);
+		PostMessageW(hwnd, (UINT)View_Window_Message::Show_After_Entering_Event_Loop, 0, 0);
 	}
 
 	this->hwnd = hwnd;
@@ -142,6 +153,11 @@ bool View_Window::discard()
 
 bool View_Window::set_current_image(IWICBitmapSource* bitmap_source)
 {
+	if (bitmap_source == nullptr)
+		return false;
+	if (!release_current_image())
+		return false;
+
 	HRESULT hr;
 	current_image_wic = bitmap_source;
 
@@ -172,7 +188,7 @@ bool View_Window::set_current_image(IWICBitmapSource* bitmap_source)
 	return true;
 }
 
-bool View_Window::set_file_name(const wchar_t * file_name, size_t length)
+bool View_Window::set_file_name(const wchar_t* file_name, size_t length)
 {
 	wchar_t temp[260];
 	const wchar_t* title = L"Image View - ";
@@ -182,7 +198,7 @@ bool View_Window::set_file_name(const wchar_t * file_name, size_t length)
 	wcsncpy(&temp[title_length], file_name, length);
 	temp[title_length + length] = L'\0';
 
-	return SetWindowTextW(hwnd, temp);
+	return !!SetWindowTextW(hwnd, temp);
 }
 
 bool View_Window::get_client_area(int* width, int* height)
@@ -198,6 +214,85 @@ bool View_Window::get_client_area(int* width, int* height)
 	*height = rect.bottom - rect.top;
 
 	return true;
+}
+
+bool View_Window::release_current_image()
+{
+	safe_release(current_image_direct2d);
+	safe_release(current_image_wic);
+
+	return true;
+}
+
+bool View_Window::handle_open_file_action()
+{
+	bool success = false;
+
+	IFileOpenDialog* dialog = nullptr;
+	IShellItemArray* items = nullptr;
+	IShellItem* item = nullptr;
+	HRESULT hr;
+
+	// Create open file dialog
+	hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+	if (dialog == nullptr)
+		goto release;
+
+	hr = dialog->SetOptions(FOS_ALLOWMULTISELECT | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST);
+	hr = dialog->Show(hwnd);
+	hr = dialog->GetResults(&items);
+
+	if (items == nullptr)
+		goto release;
+
+	hr = items->GetItemAt(0, &item);
+	if (item == nullptr)
+		goto release;
+
+	wchar_t* path = nullptr;
+	hr = item->GetDisplayName(SIGDN_FILESYSPATH, &path);
+
+	IWICBitmapSource* source = load_image_from_path(path);
+	CoTaskMemFree(path);
+
+	if (!set_current_image(source))
+		goto release;
+
+	success = true;
+
+release:
+	safe_release(item);
+	safe_release(items);
+	safe_release(dialog);
+
+	return success;
+}
+
+IWICBitmapSource* View_Window::load_image_from_path(const wchar_t* path)
+{
+	if (path == nullptr)
+		return nullptr;
+
+	HRESULT hr;
+	IWICBitmapDecoder* decoder = nullptr;
+	IWICBitmapFrameDecode* result = nullptr;
+
+	hr = wic_factory->CreateDecoderFromFilename(path, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
+	if (decoder == nullptr)
+		goto release;
+
+	hr = decoder->GetFrame(0, &result);
+	if (result == nullptr)
+		goto release;
+
+	safe_release(decoder);
+	return result;
+
+release:
+	safe_release(decoder);
+	safe_release(result);
+
+	return result;
 }
 
 int View_Window::enter_message_loop()
@@ -288,8 +383,44 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			return 0;
 		}
+		case WM_CONTEXTMENU:
+		{
+			HWND target_window = (HWND)wParam;
+			if (target_window != hwnd)
+				break; // Pass it to default window proc.
+
+			int menu_x = GET_X_LPARAM(lParam);
+			int menu_y = GET_Y_LPARAM(lParam);
+
+			SetForegroundWindow(hwnd);
+			View_Menu_Item result = (View_Menu_Item)TrackPopupMenuEx(
+				view_menu, 
+				TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD, 
+				menu_x,
+				menu_y,
+				hwnd, 
+				nullptr);
+
+			switch (result)
+			{
+				case View_Menu_Item::None:
+					break;
+				case View_Menu_Item::Open_File:
+					handle_open_file_action();
+					break;
+				default:
+					__debugbreak(); // unknown item
+			}
+
+			return 0;
+		}
 		case WM_ERASEBKGND:
 		{
+			return 0;
+		}
+		case (UINT)View_Window_Message::Show_After_Entering_Event_Loop:
+		{
+			ShowWindow(hwnd, SW_SHOWNORMAL);
 			return 0;
 		}
 	}
