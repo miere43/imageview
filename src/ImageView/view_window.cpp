@@ -1,6 +1,7 @@
 #include "view_window.hpp"
 #include <Windows.h>
 #include <windowsx.h>
+#include "defer.hpp"
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -226,28 +227,31 @@ bool View_Window::release_current_image()
 
 bool View_Window::handle_open_file_action()
 {
-    bool success = false;
-
+    HRESULT hr = 0;
     IFileOpenDialog* dialog = nullptr;
     IShellItemArray* items = nullptr;
     IShellItem* item = nullptr;
-    HRESULT hr;
+    defer ({
+        safe_release(item);
+        safe_release(items);
+        safe_release(dialog);
+    });
 
     // Create open file dialog
     hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
     if (dialog == nullptr)
-        goto release;
+        return false;
 
     hr = dialog->SetOptions(FOS_ALLOWMULTISELECT | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST);
     hr = dialog->Show(hwnd);
     hr = dialog->GetResults(&items);
 
     if (items == nullptr)
-        goto release;
+        return false;
 
     hr = items->GetItemAt(0, &item);
     if (item == nullptr)
-        goto release;
+        return false;
 
     wchar_t* path = nullptr;
     hr = item->GetDisplayName(SIGDN_FILESYSPATH, &path);
@@ -256,16 +260,9 @@ bool View_Window::handle_open_file_action()
     CoTaskMemFree(path);
 
     if (!set_current_image(source))
-        goto release;
+        return false;
 
-    success = true;
-
-release:
-    safe_release(item);
-    safe_release(items);
-    safe_release(dialog);
-
-    return success;
+    return true;
 }
 
 IWICBitmapSource* View_Window::load_image_from_path(const wchar_t* path)
