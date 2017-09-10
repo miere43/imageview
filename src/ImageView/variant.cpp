@@ -3,6 +3,6 @@
 
 //int Variant::as_int() const
 //{
-//	E_VERIFY(type == Variant::Integer);
-//	return integer;
+//    E_VERIFY(type == Variant::Integer);
+//    return integer;
 //}

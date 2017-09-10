@@ -3,5 +3,5 @@
 
 //struct Settings
 //{
-//	bool next_line();
+//    bool next_line();
 //};

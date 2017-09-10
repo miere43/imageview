@@ -4,24 +4,24 @@
 //
 //struct Variant
 //{
-//	enum VariantType
-//	{
-//		None,
-//		VoidPointer,
-//		Integer,
-//		Boolean,
-//	};
+//    enum VariantType
+//    {
+//        None,
+//        VoidPointer,
+//        Integer,
+//        Boolean,
+//    };
 //
-//	VariantType type;
-//	union
-//	{
-//		void* void_pointer;
-//		int   integer;
-//		bool  boolean;
-//	};
+//    VariantType type;
+//    union
+//    {
+//        void* void_pointer;
+//        int   integer;
+//        bool  boolean;
+//    };
 //
-//	IV_VARIANT_AS_METHOD(int);
-//	IV_VARIANT_AS_METHOD(bool);
+//    IV_VARIANT_AS_METHOD(int);
+//    IV_VARIANT_AS_METHOD(bool);
 //};
 //
 //#undef IV_VARIANT_AS_METHOD
