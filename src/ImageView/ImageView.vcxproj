@@ -145,7 +145,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="direct2d.cpp" />
+    <ClCompile Include="graphics_utility.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="variant.cpp" />
     <ClCompile Include="view_window.cpp" />
@@ -154,7 +154,7 @@
     <ClInclude Include="defer.hpp" />
     <ClInclude Include="error.hpp" />
     <ClInclude Include="math.hpp" />
-    <ClInclude Include="direct2d.hpp" />
+    <ClInclude Include="graphics_utility.hpp" />
     <ClInclude Include="settings.hpp" />
     <ClInclude Include="variant.hpp" />
     <ClInclude Include="view_window.hpp" />

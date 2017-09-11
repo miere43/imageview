@@ -2,7 +2,8 @@
 #include <Windows.h>
 #include <wincodec.h>
 #include <Shobjidl.h>
-#include "direct2d.hpp"
+
+#include "graphics_utility.hpp"
 
 struct View_Window_Init_Params
 {
@@ -11,7 +12,9 @@ struct View_Window_Init_Params
     LPCWSTR lpCmdLine   = nullptr;
     int nCmdShow = SW_SHOW;
 
-    IWICImagingFactory* wic_factory = nullptr;
+    ID2D1Factory1* d2d1 = nullptr;
+    IDWriteFactory* dwrite = nullptr;
+    IWICImagingFactory* wic = nullptr;
 
     // -1 means center it!
     int window_x = -1;
@@ -41,18 +44,23 @@ struct View_Window
 
     View_Window_State state = VWS_Default;
 
-    HMENU view_menu = 0;
+    // Graphics resources
+    ID2D1Factory1* d2d1 = nullptr;
+    IDWriteFactory* dwrite = nullptr;
+    IWICImagingFactory* wic = nullptr;
+    ID2D1HwndRenderTarget* g = nullptr;
 
-    Direct2D direct2d;
-    IWICImagingFactory* wic_factory = nullptr;
     IDWriteTextFormat* default_text_format = nullptr;
     ID2D1SolidColorBrush* default_text_foreground_brush = nullptr;
 
     ID2D1Bitmap* current_image_direct2d = nullptr;
     IWICBitmapSource* current_image_wic = nullptr;
 
+    // Menus
+    HMENU view_menu = 0;
+
     bool initialize(const View_Window_Init_Params& params);
-    bool discard();
+    bool shutdown();
 
     bool set_from_file_path(const wchar_t* file_path);
     

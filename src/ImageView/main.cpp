@@ -1,13 +1,5 @@
 #include "view_window.hpp"
-
-
-/*
-    
-    TODO:
-    - be DPI aware
-    - switch to spaces
-
-*/
+#include "graphics_utility.hpp"
 
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -16,21 +8,20 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
 #endif
 
     if (FAILED(CoInitialize(nullptr)))
-        return 0;
+        return 1;
 
-    HRESULT hr;
-
-    IWICImagingFactory* wic_factory;
-    hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic_factory));
-    if (FAILED(hr))
-        return false;
+    if (!Graphics_Utility::initialize())
+        return 1;
 
     View_Window_Init_Params params;
     params.hInstance = hInstance;
     params.lpCmdLine = lpCmdLine;
     params.nCmdShow  = nCmdShow;
 
-    params.wic_factory = wic_factory;
+    params.wic = Graphics_Utility::wic;
+    params.d2d1 = Graphics_Utility::d2d1;
+    params.dwrite = Graphics_Utility::dwrite;
+
     params.show_after_entering_event_loop = true;
 
     View_Window view;
@@ -41,7 +32,9 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
     //view.set_current_image(frame);
 
     int return_code = view.enter_message_loop();
-    view.discard();
+
+    view.shutdown();
+    Graphics_Utility::shutdown();
 
     return return_code;
 }

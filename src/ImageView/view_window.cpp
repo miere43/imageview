@@ -13,7 +13,7 @@ enum class View_Window_Message : UINT
 enum class View_Menu_Item : int
 {
     None = 0,
-    Open_File = 1
+    Open_File = 1,
 };
 
 bool View_Window::initialize(const View_Window_Init_Params& params)
@@ -119,12 +119,26 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     if (hwnd == 0)
         return false;
 
-    if (!direct2d.initialize(hwnd))
-        return false;
-
     SetLastError(0);
     SetWindowLongPtrW(hwnd, 0, (LONG_PTR)this);
     if (GetLastError() != 0)
+        return false;
+
+    // Initialize graphics resources
+    wic = params.wic;
+    d2d1 = params.d2d1;
+    dwrite = params.dwrite;
+
+    if (wic == nullptr || d2d1 == nullptr || dwrite == nullptr)
+        return false;
+
+    wic->AddRef();
+    d2d1->AddRef();
+    dwrite->AddRef();
+
+    // Create render target
+    g = Graphics_Utility::create_hwnd_render_target(hwnd);
+    if (g == nullptr)
         return false;
 
     // Create view menu
@@ -132,7 +146,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Open_File, L"Open...");
 
     // Create default text format
-    hr = direct2d.dwrite->CreateTextFormat(
+    hr = dwrite->CreateTextFormat(
         L"Segoe UI",
         nullptr,
         DWRITE_FONT_WEIGHT_NORMAL,
@@ -144,7 +158,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     if (FAILED(hr))
         return false;
 
-    hr = direct2d.render_target->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), &default_text_foreground_brush);
+    hr = g->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), &default_text_foreground_brush);
     if (FAILED(hr))
         return false;
 
@@ -156,17 +170,23 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     }
 
     this->hwnd = hwnd;
-    this->wic_factory = params.wic_factory;
+    this->wic = params.wic;
 
     return (initialized = true);
 }
 
-bool View_Window::discard()
+bool View_Window::shutdown()
 {
-    direct2d.discard();
+    safe_release(wic);
+    safe_release(d2d1);
+    safe_release(dwrite);
     safe_release(current_image_direct2d);
+    safe_release(current_image_wic);
 
-    return false;
+    DestroyWindow(hwnd);
+    hwnd = 0;
+
+    return true;
 }
 
 bool View_Window::set_from_file_path(const wchar_t * file_path)
@@ -197,13 +217,13 @@ bool View_Window::set_current_image(IWICBitmapSource* bitmap_source)
     IWICBitmapSource* actual_source = bitmap_source;
     if (pixel_format != GUID_WICPixelFormat32bppPBGRA)
     {
-        wic_factory->CreateFormatConverter(&converter);
+        wic->CreateFormatConverter(&converter);
         
         converter->Initialize(bitmap_source, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
         actual_source = converter;
     }
 
-    hr = direct2d.render_target->CreateBitmapFromWicBitmap(actual_source, &current_image_direct2d);
+    hr = g->CreateBitmapFromWicBitmap(actual_source, &current_image_direct2d);
     if (FAILED(hr))
         __debugbreak();
 
@@ -310,7 +330,7 @@ IWICBitmapSource* View_Window::load_image_from_path(const wchar_t* path)
     IWICBitmapDecoder* decoder = nullptr;
     IWICBitmapFrameDecode* result = nullptr;
 
-    hr = wic_factory->CreateDecoderFromFilename(path, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
+    hr = wic->CreateDecoderFromFilename(path, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
     if (decoder == nullptr)
         goto releaseAndFail;
 
@@ -366,7 +386,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int new_width = LOWORD(lParam);
             int new_height = HIWORD(lParam);
 
-            direct2d.render_target->Resize(D2D1::SizeU(new_width, new_height));
+            g->Resize(D2D1::SizeU(new_width, new_height));
 
             return 0;
         }
@@ -384,21 +404,18 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case WM_PAINT:
         {
-            ID2D1RenderTarget* rt = direct2d.render_target;
-            IDWriteFactory* dwrite = direct2d.dwrite;
-
             if (current_image_direct2d == nullptr)
             {
-                rt->BeginDraw();
-                rt->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+                g->BeginDraw();
+                g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
 
                 default_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                 default_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
                 
-                rt->DrawTextW(L"Please load image", wcslen(L"Please load image"), default_text_format,
+                g->DrawTextW(L"Please load image", wcslen(L"Please load image"), default_text_format,
                     client_area_as_rectf(), default_text_foreground_brush);
 
-                rt->EndDraw();
+                g->EndDraw();
                 break;
             }
 
@@ -413,12 +430,12 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 client_height / 2.0f + image_size.height / 2.0f
             );
 
-            rt->BeginDraw();
-            rt->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+            g->BeginDraw();
+            g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
 
-            rt->DrawBitmap(current_image_direct2d, dest_rect);
+            g->DrawBitmap(current_image_direct2d, dest_rect);
 
-            rt->EndDraw();
+            g->EndDraw();
 
             ValidateRect(hwnd, nullptr);
 
