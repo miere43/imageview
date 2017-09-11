@@ -9,11 +9,11 @@ bool Direct2D::initialize(HWND hwnd)
 
     options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
 
-    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), &options, (void**)&device);
+    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), &options, (void**)&d2d1);
     if (FAILED(hr))
         return false;
 
-    device->GetDesktopDpi(&dpi_x, &dpi_y);
+    d2d1->GetDesktopDpi(&dpi_x, &dpi_y);
 
     RECT client_area = { 0 };
     GetClientRect(hwnd, &client_area);
@@ -25,20 +25,25 @@ bool Direct2D::initialize(HWND hwnd)
     D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
     D2D1_HWND_RENDER_TARGET_PROPERTIES hwnd_props = D2D1::HwndRenderTargetProperties(hwnd, render_target_size);
 
-    hr = device->CreateHwndRenderTarget(props, hwnd_props, &render_target);
+    hr = d2d1->CreateHwndRenderTarget(props, hwnd_props, &render_target);
     if (FAILED(hr))
-        goto releaseD2D1FactoryAndFail;
+        goto fail;
+
+    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)&dwrite);
+    if (FAILED(hr))
+        goto fail;
 
     return true;
 
-releaseD2D1FactoryAndFail:
-    safe_release(device);
+fail:
+    safe_release(dwrite);
+    safe_release(d2d1);
     return false;
 }
 
 bool Direct2D::discard()
 {
-    safe_release(device);
+    safe_release(d2d1);
     safe_release(render_target);
 
     return true;

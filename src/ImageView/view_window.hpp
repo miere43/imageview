@@ -1,8 +1,8 @@
 #pragma once
 #include <Windows.h>
 #include <wincodec.h>
-#include "direct2d.hpp"
 #include <Shobjidl.h>
+#include "direct2d.hpp"
 
 struct View_Window_Init_Params
 {
@@ -22,27 +22,45 @@ struct View_Window_Init_Params
     bool show_after_entering_event_loop = false;
 };
 
+struct Image_Info
+{
+    wchar_t* path;
+};
+
 struct View_Window
 {
+    enum View_Window_State
+    {
+        VWS_Default = 0,
+        VWS_Viewing_Image = 1
+    };
+
     HWND hwnd = 0;
     bool run_message_loop = false;
     bool initialized = false;
 
+    View_Window_State state = VWS_Default;
+
     HMENU view_menu = 0;
 
     Direct2D direct2d;
-    IWICImagingFactory* wic_factory;
+    IWICImagingFactory* wic_factory = nullptr;
+    IDWriteTextFormat* default_text_format = nullptr;
+    ID2D1SolidColorBrush* default_text_foreground_brush = nullptr;
 
     ID2D1Bitmap* current_image_direct2d = nullptr;
     IWICBitmapSource* current_image_wic = nullptr;
 
     bool initialize(const View_Window_Init_Params& params);
     bool discard();
+
+    bool set_from_file_path(const wchar_t* file_path);
     
     bool set_current_image(IWICBitmapSource* image);
     bool set_file_name(const wchar_t* file_name, size_t length);
 
     bool get_client_area(int* width, int* height);
+    //bool close_current_image();
 
     bool release_current_image();
     bool handle_open_file_action();
@@ -52,4 +70,9 @@ struct View_Window
 
     int enter_message_loop();
     LRESULT __stdcall wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+private:
+    //void set_to_default_state(View_Window_State previous_state);
+    //void go_to_state(View_Window_State new_state);
+    D2D1_RECT_F client_area_as_rectf();
 };
