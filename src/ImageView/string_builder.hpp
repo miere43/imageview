@@ -8,6 +8,7 @@ struct String_Builder
     int count = 0;
     int capacity = 0;
     IAllocator* allocator = nullptr;
+    bool is_valid = false;
 
     bool append_char(wchar_t c);
     bool append_string(const String& string);

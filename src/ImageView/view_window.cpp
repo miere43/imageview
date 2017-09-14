@@ -235,10 +235,18 @@ bool View_Window::shutdown()
     return true;
 }
 
+String View_Window::get_file_info_absolute_path(const String& folder, const File_Info* file_info, IAllocator* allocator)
+{
+    const String strings[] ={ folder, file_info->path };
+    const size_t num = ARRAYSIZE(strings);
+
+    return String::join(L'/', strings, num, allocator);
+}
+
 static bool image_filter(const WIN32_FIND_DATA& data, void* userdata)
 {
     static const wchar_t* image_extensions[] = { L".jpg", L".png", L".gif", L".bmp", nullptr };
-    
+
     bool is_file = data.dwFileAttributes != INVALID_FILE_ATTRIBUTES && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
     if (!is_file)
         return false;
@@ -254,14 +262,6 @@ static bool image_filter(const WIN32_FIND_DATA& data, void* userdata)
     }
 
     return false;
-}
-
-String View_Window::get_file_info_absolute_path(const String& folder, File_Info* file_info, IAllocator* allocator)
-{
-    const String strings[] = { folder, file_info->path };
-    const size_t num = ARRAYSIZE(strings);
-
-    return String::join(L'/', strings, num, allocator);
 }
 
 void View_Window::load_path(const String& file_path)
@@ -342,21 +342,25 @@ void View_Window::view_file_index(int index)
 void View_Window::update_view_title()
 {
     String_Builder title;
+    title.is_valid = true;
+
     void* prev = g_temporary_allocator->current;
     title.allocator = g_temporary_allocator;
 
     title.append_format(L"(%i/%i) %s", current_file_index, current_files.count, current_files.data[current_file_index].path);
     title.append_char(L'\0');
+    if (!title.is_valid) {
+        report_error(L"Unable to update title.\n");
+        return;
+    }
 
     SetWindowTextW(hwnd, title.buffer);
-    g_temporary_allocator->deallocate(title.buffer);
     g_temporary_allocator->current = prev;
 }
 
 bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
 {
-    if (bitmap_decoder == nullptr)
-        return false;
+    E_VERIFY_NULL_R(bitmap_decoder, false);
     if (!release_current_image())
         return false;
 
@@ -368,24 +372,30 @@ bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
 
     WICPixelFormatGUID pixel_format;
     hr = bitmap_frame->GetPixelFormat(&pixel_format);
-    if (FAILED(hr))
+    if (FAILED(hr)) {
+        report_error(L"Unable to get pixel format of bitmap frame.\n");
         return false;
+    }
 
     IWICFormatConverter* converter = nullptr;
     IWICBitmapSource* actual_source = bitmap_frame;
     if (pixel_format != GUID_WICPixelFormat32bppPBGRA)
     {
         hr = wic->CreateFormatConverter(&converter);
-        if (FAILED(hr))
+        if (FAILED(hr)) {
+            report_error(L"Unable to create format converter.\n");
             return false;
+        }
 
         converter->Initialize(bitmap_frame, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeMedianCut);
         actual_source = converter;
     }
 
     hr = g->CreateBitmapFromWicBitmap(actual_source, &current_image_direct2d);
-    if (FAILED(hr))
-        __debugbreak();
+    if (FAILED(hr)) {
+        report_error(L"Unable to create Direct2D bitmap from WIC bitmap.\n");
+        return false;
+    }
 
     if (converter != nullptr)
         converter->Release();
@@ -413,16 +423,6 @@ bool View_Window::get_client_area(int* width, int* height)
 
     return true;
 }
-//
-//bool View_Window::close_current_image()
-//{
-//    safe_release(current_image_direct2d);
-//    safe_release(current_image_wic);
-//
-//    InvalidateRect(hwnd, nullptr, false);
-//
-//    return true;
-//}
 
 bool View_Window::release_current_image()
 {

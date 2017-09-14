@@ -8,8 +8,10 @@
 
 bool String_Builder::append_char(wchar_t c)
 {
-    if (!ensure_capacity(count + 1))
+    if (!ensure_capacity(count + 1)) {
+        is_valid = true;
         return false;
+    }
 
     buffer[count++] = c;
     return true;
@@ -17,8 +19,10 @@ bool String_Builder::append_char(wchar_t c)
 
 bool String_Builder::append_string(const String& string)
 {
-    if (!ensure_capacity(string.count))
+    if (!ensure_capacity(string.count)) {
+        is_valid = false;
         return false;
+    }
     if (String::is_null_or_empty(string))
         return true;
 
@@ -41,18 +45,24 @@ bool String_Builder::append_format(const wchar_t* format, ...)
     va_start(ap, format);
 
     int num_chars_required = _vscwprintf(format, ap);
-    if (num_chars_required == -1)
+    if (num_chars_required == -1) {
+        is_valid = false;
         return false;
+    }
 
-    if (!ensure_capacity(count + num_chars_required))
+    if (!ensure_capacity(count + num_chars_required)) {
+        is_valid = false;
         return false;
+    }
 
     wchar_t* data = &buffer[count];
     const size_t chars_left = (capacity - count);
 
     int num_written = vswprintf_s(data, chars_left, format, ap);
-    if (num_written != num_chars_required)
+    if (num_written != num_chars_required) {
+        is_valid = false;
         return false;
+    }
 
     va_end(ap);
 

@@ -79,7 +79,7 @@ struct View_Window
 
     void update_view_title();
 
-    String get_file_info_absolute_path(const String& folder, File_Info* file_info, IAllocator* allocator);
+    String get_file_info_absolute_path(const String& folder, const File_Info* file_info, IAllocator* allocator);
 
     bool set_current_image(IWICBitmapDecoder* image);
     bool get_client_area(int* width, int* height);

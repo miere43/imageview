@@ -13,4 +13,5 @@ void report_error(const wchar_t * format, ...)
     va_end(ap);
 
     OutputDebugStringW(buffer);
+    __debugbreak();
 }
