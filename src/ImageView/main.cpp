@@ -1,5 +1,11 @@
 #include "view_window.hpp"
 #include "graphics_utility.hpp"
+#include "file_system_utility.hpp"
+
+bool filter(const WIN32_FIND_DATA& data, void* userdata)
+{
+    return (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
 
 int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -7,11 +13,20 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
     HeapSetInformation(0, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
 
-    if (FAILED(CoInitialize(nullptr)))
-        return 1;
+    if (!g_temporary_allocator->set_size(32 * 1024)) {
+        report_error(L"Unable to initialize temporary allocator.\n");
+        return -1;
+    }
 
-    if (!Graphics_Utility::initialize())
-        return 1;
+    if (FAILED(CoInitialize(nullptr))) {
+        report_error(L"Unable to initialize COM.\n");
+        return -1;
+    }
+
+    if (!Graphics_Utility::initialize()) {
+        report_error(L"Unable to initialize graphics.\n");
+        return -1;
+    }
 
     View_Window_Init_Params params;
     params.hInstance = hInstance;
@@ -25,11 +40,10 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
     params.show_after_entering_event_loop = true;
 
     View_Window view;
-    if (!view.initialize(params))
+    if (!view.initialize(params)) {
+        report_error(L"Unable to initialize main window.\n");
         return 1;
-
-    //view.set_file_name(L"lol", 3);
-    //view.set_current_image(frame);
+    }
 
     int return_code = view.enter_message_loop();
 

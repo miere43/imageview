@@ -3,19 +3,12 @@
 #include <dwrite.h>
 #include <wincodec.h>
 
+#include "com_utility.hpp"
+#include "expected.hpp"
+
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "windowscodecs.lib")
-
-template<typename T>
-inline void safe_release(T*& ptr)
-{
-    if (ptr != nullptr)
-    {
-        ptr->Release();
-        ptr = nullptr;
-    }
-}
 
 struct Graphics_Utility
 {
@@ -26,5 +19,5 @@ struct Graphics_Utility
     static bool initialize();
     static bool shutdown();
 
-    static ID2D1HwndRenderTarget* create_hwnd_render_target(HWND hwnd);
+    static HRESULT create_hwnd_render_target(HWND hwnd, ID2D1HwndRenderTarget** render_target);
 };

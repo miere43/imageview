@@ -3,6 +3,7 @@
 #include <wincodec.h>
 #include <Shobjidl.h>
 
+#include "file_system_utility.hpp"
 #include "graphics_utility.hpp"
 
 struct View_Window_Init_Params
@@ -25,11 +26,6 @@ struct View_Window_Init_Params
     bool show_after_entering_event_loop = false;
 };
 
-struct Image_Info
-{
-    wchar_t* path;
-};
-
 struct View_Window
 {
     enum View_Window_State
@@ -38,10 +34,18 @@ struct View_Window
         VWS_Viewing_Image = 1
     };
 
+    const static int Center_Window = 1;
+    const static int Maximize_If_Too_Big = 2;
+
     HWND hwnd = 0;
     bool run_message_loop = false;
     bool initialized = false;
 
+    String current_folder;
+    Sequence<File_Info> current_files;
+    int current_file_index = -1;
+    IWICBitmapDecoder* current_file_decoder = nullptr;
+    
     View_Window_State state = VWS_Default;
 
     // Graphics resources
@@ -54,7 +58,13 @@ struct View_Window
     ID2D1SolidColorBrush* default_text_foreground_brush = nullptr;
 
     ID2D1Bitmap* current_image_direct2d = nullptr;
-    IWICBitmapSource* current_image_wic = nullptr;
+    IWICBitmapDecoder* decoder = nullptr;
+
+    //
+    int desktop_width = 800;
+    int desktop_height = 600;
+    int desktop_work_width = 800;
+    int desktop_work_height = 600;
 
     // Menus
     HMENU view_menu = 0;
@@ -62,25 +72,31 @@ struct View_Window
     bool initialize(const View_Window_Init_Params& params);
     bool shutdown();
 
-    bool set_from_file_path(const wchar_t* file_path);
-    
-    bool set_current_image(IWICBitmapSource* image);
-    bool set_file_name(const wchar_t* file_name, size_t length);
+    void load_path(const String& file_path);
+    void view_prev();
+    void view_next();
+    void view_file_index(int index);
 
+    void update_view_title();
+
+    String get_file_info_absolute_path(const String& folder, File_Info* file_info, IAllocator* allocator);
+
+    bool set_current_image(IWICBitmapDecoder* image);
     bool get_client_area(int* width, int* height);
-    //bool close_current_image();
-
     bool release_current_image();
+    
     bool handle_open_file_action();
+    int find_file_info_by_path(const String& path);
 
-    // @TODO: should be WIC method
-    IWICBitmapSource* load_image_from_path(const wchar_t* path);
+    IWICBitmapDecoder* create_decoder_from_file_path(const wchar_t* path);
 
     int enter_message_loop();
     LRESULT __stdcall wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
 private:
+    wchar_t title_buffer[512] = { 0 };
+
     //void set_to_default_state(View_Window_State previous_state);
     //void go_to_state(View_Window_State new_state);
     D2D1_RECT_F client_area_as_rectf();
+    void resize_window(int new_width, int new_height, int flags);
 };
