@@ -147,23 +147,19 @@
     <ClCompile Include="allocator.cpp" />
     <ClCompile Include="com_utility.cpp" />
     <ClCompile Include="error.cpp" />
-    <ClCompile Include="expected.cpp" />
     <ClCompile Include="file_system_utility.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="graphics_utility.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="string.cpp" />
     <ClCompile Include="string_builder.cpp" />
-    <ClCompile Include="variant.cpp" />
     <ClCompile Include="view_window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="allocator.hpp" />
-    <ClInclude Include="common_utility.hpp" />
     <ClInclude Include="com_utility.hpp" />
     <ClInclude Include="defer.hpp" />
     <ClInclude Include="error.hpp" />
-    <ClInclude Include="expected.hpp" />
     <ClInclude Include="file_system_utility.hpp" />
     <ClInclude Include="path_utility.hpp" />
     <ClInclude Include="sequence.hpp" />
@@ -172,9 +168,7 @@
     <ClInclude Include="settings.hpp" />
     <ClInclude Include="string.hpp" />
     <ClInclude Include="string_builder.hpp" />
-    <ClInclude Include="variant.hpp" />
     <ClInclude Include="view_window.hpp" />
-    <ClInclude Include="wic.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -79,3 +79,19 @@ void Temporary_Allocator::deallocate(void * block)
 {
     // I don't care.
 }
+
+Temporary_Allocator_Guard::Temporary_Allocator_Guard(Temporary_Allocator * allocator)
+    : allocator(allocator)
+{
+    E_VERIFY_NULL(allocator);
+
+    prev_current_state = allocator->current;
+}
+
+Temporary_Allocator_Guard::~Temporary_Allocator_Guard()
+{
+    if (allocator != nullptr && prev_current_state != nullptr) {
+        allocator->current = prev_current_state;
+        prev_current_state = nullptr;
+    }
+}

@@ -4,7 +4,6 @@
 #include <wincodec.h>
 
 #include "com_utility.hpp"
-#include "expected.hpp"
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")

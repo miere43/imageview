@@ -276,7 +276,7 @@ void View_Window::load_path(const String& file_path)
     current_files = files;
     current_file_index = 0;
 
-    void* prev = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
     String file_name;
     if (!File_System_Utility::extract_file_name_from_path(file_path, &file_name, g_temporary_allocator))
         __debugbreak();
@@ -284,8 +284,6 @@ void View_Window::load_path(const String& file_path)
     int index = find_file_info_by_path(file_name);
     if (index == -1)
         __debugbreak();
-
-    g_temporary_allocator->current = prev;
 
     current_file_index = index;
     view_file_index(index);
@@ -328,13 +326,12 @@ void View_Window::view_file_index(int index)
     release_current_image();
     current_file_index = index;
 
-    void* current = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
     String full_path = get_file_info_absolute_path(current_folder, &current_files.data[current_file_index], g_temporary_allocator);
     if (String::is_null(full_path))
         __debugbreak();
 
     IWICBitmapDecoder* decoder = create_decoder_from_file_path(full_path.data);
-    g_temporary_allocator->current = current;
     
     if (decoder == nullptr)
         return;
@@ -347,18 +344,21 @@ void View_Window::view_file_index(int index)
 
 void View_Window::update_view_title()
 {
+    File_Info* current = get_current_file_info();
+    if (current == nullptr)
+        return;
+
+    const wchar_t* path = current->path.data;
+
     String_Builder title{ g_temporary_allocator };
-    void* prev = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
 
     title.begin();
-    title.append_format(L"(%i/%i) %s", current_file_index + 1, current_files.count, current_files.data[current_file_index].path);
-    if (!title.end()) {
+    title.append_format(L"(%i/%i) %s", current_file_index + 1, current_files.count, path);
+    if (!title.end())
         report_error(L"Unable to update title.\n");
-    } else {
+    else 
         SetWindowTextW(hwnd, title.buffer);
-    }
-
-    g_temporary_allocator->current = prev;
 }
 
 bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
@@ -522,7 +522,7 @@ int View_Window::enter_message_loop()
         DispatchMessageW(&msg);
     }
 
-    return msg.message == WM_QUIT ? msg.wParam : 0;
+    return msg.message == WM_QUIT ? (int)msg.wParam : 0;
 }
 
 LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -619,11 +619,10 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     File_Info* current = get_current_file_info();
                     if (current != nullptr)
                     {
-                        void* prev = g_temporary_allocator->current;
+                        Temporary_Allocator_Guard g;
                         String abs_path = get_file_info_absolute_path(current_folder, current, g_temporary_allocator);
                         if (!String::is_null(abs_path) && SUCCEEDED(File_System_Utility::normalize_path(abs_path)))
                             File_System_Utility::select_file_in_explorer(abs_path);
-                        g_temporary_allocator->current = prev;
                     }
                     break;
                 }
@@ -686,7 +685,7 @@ void View_Window::error_box(HRESULT hr)
 void View_Window::error_box(const wchar_t* message)
 {   
     String_Builder sb{ g_temporary_allocator };
-    void* prev = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
 
     sb.begin();
     sb.append_string(L"Error: ");
@@ -696,8 +695,6 @@ void View_Window::error_box(const wchar_t* message)
         MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
     else
         MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
-
-    g_temporary_allocator->current = prev;
 }
 
 File_Info* View_Window::get_current_file_info() const
@@ -720,7 +717,7 @@ void View_Window::draw_window()
         default_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
         default_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-        g->DrawTextW(L"Please load image", wcslen(L"Please load image"), default_text_format,
+        g->DrawTextW(L"Please load image", (int)wcslen(L"Please load image"), default_text_format,
             client_area_as_rectf(), default_text_foreground_brush);
 
         hr = g->EndDraw();

@@ -38,3 +38,12 @@ struct Temporary_Allocator : public IAllocator
 extern Standard_Allocator* g_standard_allocator;
 extern Temporary_Allocator* g_temporary_allocator;
 
+// Remembers 'current' pointer of temporary allocator and reset's it back when out of scope.
+struct Temporary_Allocator_Guard
+{
+    Temporary_Allocator* allocator = nullptr;
+    void* prev_current_state = nullptr;
+
+    Temporary_Allocator_Guard(Temporary_Allocator* allocator = g_temporary_allocator);
+    ~Temporary_Allocator_Guard();
+};

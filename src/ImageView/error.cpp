@@ -23,7 +23,7 @@ void report_error(const wchar_t * format, ...)
 void debug(const wchar_t* format, ...)
 {
     String_Builder sb{ g_temporary_allocator };
-    void* prev = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
 
     va_list args;
     va_start(args, format);
@@ -34,20 +34,18 @@ void debug(const wchar_t* format, ...)
     {
         __debugbreak();
         va_end(args);
-        g_temporary_allocator->current = prev;
         return;
     }
 
     va_end(args);
 
     OutputDebugStringW(sb.buffer);
-    g_temporary_allocator->current = prev;
 }
 
 void error_box(HWND hwnd, HRESULT hr)
 {
     String_Builder sb{ g_temporary_allocator };
-    void* prev = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
 
     sb.begin();
     sb.append_string(L"Error: ");
@@ -58,6 +56,4 @@ void error_box(HWND hwnd, HRESULT hr)
         MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
     else
         MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
-    
-    g_temporary_allocator->current = prev;
 }

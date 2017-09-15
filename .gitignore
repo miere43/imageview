@@ -5,4 +5,5 @@
 *.suo
 src/ImageView/Debug
 src/ImageView/Release
+src/ImageView/x64
 src/ImageView/.vs

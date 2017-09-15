@@ -26,7 +26,7 @@ HRESULT File_System_Utility::get_folder_files(
 
     size_t path_size = folder_path.calc_size() + (ends_with_slash * sizeof(wchar_t)) + (sizeof(wchar_t) * 2);
     
-    void* prev_temp_current = g_temporary_allocator->current;
+    Temporary_Allocator_Guard g;
     wchar_t* temp_folder_path = (wchar_t*)g_temporary_allocator->allocate(path_size);
 
     if (temp_folder_path == nullptr)
@@ -41,7 +41,6 @@ HRESULT File_System_Utility::get_folder_files(
 
     WIN32_FIND_DATA file;
     HANDLE search_handle = FindFirstFileExW(temp_folder_path, FindExInfoBasic, &file, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
-    g_temporary_allocator->current = prev_temp_current;
 
     if (search_handle == INVALID_HANDLE_VALUE)
         return E_HANDLE;
@@ -52,7 +51,7 @@ HRESULT File_System_Utility::get_folder_files(
         if (filter(file, userdata))
         {
             File_Info info;
-            info.path = String::duplicate(file.cFileName, wcslen(file.cFileName));
+            info.path = String::duplicate(file.cFileName, (int)wcslen(file.cFileName));
             info.file_attributes = file.dwFileAttributes;
             info.creation_time = file.ftCreationTime;
             info.last_access_time = file.ftLastAccessTime;
@@ -83,7 +82,6 @@ HRESULT File_System_Utility::extract_folder_path(const String& file_path, String
     if (String::is_null_or_empty(file_path))
         return false;
 
-    void* temp_current = g_temporary_allocator->current;
     int slash_index = file_path.last_index_of('/');
     if (slash_index == -1)
         slash_index = file_path.last_index_of('\\');
@@ -125,7 +123,7 @@ HRESULT File_System_Utility::select_file_in_explorer(const String& file)
 {
     E_VERIFY_R(!String::is_null(file), E_INVALIDARG);
 
-    ITEMIDLIST* item = ILCreateFromPathW(file.data);
+    LPITEMIDLIST item = ILCreateFromPathW(file.data);
     if (item == nullptr)
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND); // @TODO: is really not found, maybe it's just random error?
 
