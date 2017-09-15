@@ -22,15 +22,15 @@ void report_error(const wchar_t * format, ...)
 
 void debug(const wchar_t* format, ...)
 {
-    String_Builder sb;
-    sb.allocator = g_temporary_allocator;
-    sb.is_valid = true;
+    String_Builder sb{ g_temporary_allocator };
     void* prev = g_temporary_allocator->current;
 
     va_list args;
     va_start(args, format);
 
-    if (!(sb.append_format(format, args) && sb.append_char(L'\0')))
+    sb.begin();
+    sb.append_format(format, args);
+    if (!sb.end())
     {
         __debugbreak();
         va_end(args);
@@ -46,20 +46,18 @@ void debug(const wchar_t* format, ...)
 
 void error_box(HWND hwnd, HRESULT hr)
 {
-    String_Builder sb;
-    sb.allocator = g_temporary_allocator;
-    sb.is_valid = true;
+    String_Builder sb{ g_temporary_allocator };
     void* prev = g_temporary_allocator->current;
 
+    sb.begin();
     sb.append_string(L"Error: ");
     sb.append_string(hresult_to_string(hr));
     sb.append_string(L"\n\n");
     sb.append_format(L"HRESULT: %#010x", hr);
-    sb.append_char(L'\0');
-
-    if (!sb.is_valid)
-        MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
-    else
+    if (sb.end())
         MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
+    else
+        MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
+    
     g_temporary_allocator->current = prev;
 }

@@ -347,22 +347,17 @@ void View_Window::view_file_index(int index)
 
 void View_Window::update_view_title()
 {
-    String_Builder title;
-    title.is_valid = true;
-
+    String_Builder title{ g_temporary_allocator };
     void* prev = g_temporary_allocator->current;
-    title.allocator = g_temporary_allocator;
 
+    title.begin();
     title.append_format(L"(%i/%i) %s", current_file_index + 1, current_files.count, current_files.data[current_file_index].path);
-    title.append_char(L'\0');
-
-    if (!title.is_valid) {
+    if (!title.end()) {
         report_error(L"Unable to update title.\n");
-        g_temporary_allocator->current = prev;
-        return;
+    } else {
+        SetWindowTextW(hwnd, title.buffer);
     }
 
-    SetWindowTextW(hwnd, title.buffer);
     g_temporary_allocator->current = prev;
 }
 
@@ -685,39 +680,23 @@ void View_Window::resize_window(int new_width, int new_height, int flags)
 
 void View_Window::error_box(HRESULT hr)
 {
-    String_Builder sb;
-    sb.allocator = g_temporary_allocator;
-    sb.is_valid = true;
-    void* prev = g_temporary_allocator->current;
-
-    sb.append_string(L"Error: ");
-    sb.append_string(hresult_to_string(hr));
-    sb.append_string(L"\n\n");
-    sb.append_format(L"HRESULT: %#010x", hr);
-    sb.append_char(L'\0');
-
-    if (!sb.is_valid)
-        MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
-    else
-        MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
-    g_temporary_allocator->current = prev;
+    error_box(hresult_to_string(hr));
 }
 
-void View_Window::error_box(const wchar_t * message)
+void View_Window::error_box(const wchar_t* message)
 {   
-    String_Builder sb;
-    sb.allocator = g_temporary_allocator;
-    sb.is_valid = true;
+    String_Builder sb{ g_temporary_allocator };
     void* prev = g_temporary_allocator->current;
 
+    sb.begin();
     sb.append_string(L"Error: ");
     sb.append_string(message);
     sb.append_char(L'\0');
-
-    if (!sb.is_valid)
+    if (!sb.end())
         MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
     else
         MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
+
     g_temporary_allocator->current = prev;
 }
 

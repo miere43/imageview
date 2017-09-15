@@ -10,6 +10,22 @@ String_Builder::String_Builder(IAllocator * allocator)
     this->allocator = allocator;
 }
 
+void String_Builder::clear()
+{
+    E_VERIFY(is_begin_called == false); // Call 'end' first!
+
+    count = 0;
+    is_valid = true;
+}
+
+void String_Builder::begin()
+{
+    E_VERIFY(is_begin_called == false); // Call 'end' first!
+
+    clear();
+    is_begin_called = true;
+}
+
 bool String_Builder::append_char(wchar_t c)
 {
     if (!ensure_capacity(count + 1)) {
@@ -64,9 +80,7 @@ bool String_Builder::append_format(const wchar_t * format, va_list args)
     }
 
     // _vscwprintf doesn't count terminating null, but vswprintf_s prints it.
-    ++num_chars_required; 
-
-    if (!ensure_capacity(count + num_chars_required)) {
+    if (!ensure_capacity(count + num_chars_required + 1)) {
         is_valid = false;
         return false;
     }
@@ -82,6 +96,17 @@ bool String_Builder::append_format(const wchar_t * format, va_list args)
 
     count += num_chars_required;
     return true;
+}
+
+bool String_Builder::end(bool append_terminating_null)
+{
+    E_VERIFY_R(is_begin_called == true, false); // Call 'begin' first!
+    is_begin_called = false;
+
+    if (is_valid && append_terminating_null)
+        append_char(L'\0');
+
+    return is_valid;
 }
 
 bool String_Builder::ensure_capacity(int required_capacity)
