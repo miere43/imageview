@@ -1,13 +1,16 @@
 ﻿#include <Windows.h>
 #include <windowsx.h>
 #include <wchar.h>
+#include <math.h>
 
 #include "string_builder.hpp"
 #include "view_window.hpp"
 #include "defer.hpp"
+#include "error.hpp"
 
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+HRESULT adjust_window_rect(int* width, int* height, DWORD window_flags, DWORD window_flags_ex);
 
 enum class View_Window_Message : UINT
 {
@@ -76,18 +79,13 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     const DWORD style_flags_ex = 0;
     const DWORD style_flags    = WS_BORDER | WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW;
 
-    int window_width;
-    int window_height;
-    {
-        RECT window_rect = { 0 };
+    int window_width = params.window_client_area_width;
+    int window_height = params.window_client_area_height;
 
-        window_rect.right  = params.window_client_area_width;
-        window_rect.bottom = params.window_client_area_height;
-
-        AdjustWindowRectEx(&window_rect, style_flags, false, style_flags_ex);
-    
-        window_width  = window_rect.right  - window_rect.left;
-        window_height = window_rect.bottom - window_rect.top;
+    hr = adjust_window_rect(&window_width, &window_height, style_flags, style_flags_ex);
+    if (FAILED(hr)) {
+        error_box(hr);
+        return false;
     }
 
     // Get desktop size
@@ -175,7 +173,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
         error_box(hr);
         return false;
     }
-
+    
     // Create view menu
     view_menu = CreatePopupMenu();
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Open_File, L"Open...");
@@ -224,7 +222,6 @@ bool View_Window::shutdown()
     safe_release(g);
     safe_release(default_text_foreground_brush);
     safe_release(default_text_format);
-
 
     DestroyWindow(hwnd);
     hwnd = 0;
@@ -296,6 +293,8 @@ void View_Window::load_path(const String& file_path)
 
 void View_Window::view_prev()
 {
+    if (current_files.count == 1)
+        return;
     if (current_file_index < 0 || current_files.is_empty())
         return;
 
@@ -308,6 +307,11 @@ void View_Window::view_prev()
 
 void View_Window::view_next()
 {
+    if (current_files.count == 1)
+        return;
+    if (current_file_index < 0 || current_files.is_empty())
+        return;
+    
     int index = current_file_index + 1;
     if (index < current_files.count)
         view_file_index(index);
@@ -518,7 +522,7 @@ int View_Window::enter_message_loop()
 
         if (msg.message == WM_QUIT)
             break;
-
+        
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
@@ -557,41 +561,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case WM_PAINT:
         {
-            if (current_image_direct2d == nullptr)
-            {
-                g->BeginDraw();
-                g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-
-                default_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-                default_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-                
-                g->DrawTextW(L"Please load image", wcslen(L"Please load image"), default_text_format,
-                    client_area_as_rectf(), default_text_foreground_brush);
-
-                g->EndDraw();
-                break;
-            }
-
-            int client_width, client_height;
-            get_client_area(&client_width, &client_height);
-
-            D2D1_SIZE_F image_size = current_image_direct2d->GetSize();
-            D2D1_RECT_F dest_rect = D2D1::RectF(
-                client_width / 2.0f - image_size.width / 2.0f,
-                client_height / 2.0f - image_size.height / 2.0f,
-                client_width / 2.0f + image_size.width / 2.0f,
-                client_height / 2.0f + image_size.height / 2.0f
-            );
-
-            g->BeginDraw();
-            g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
-
-            g->DrawBitmap(current_image_direct2d, dest_rect);
-
-            g->EndDraw();
-
-            ValidateRect(hwnd, nullptr);
-
+            draw_window();
             return 0;
         }
         case WM_CONTEXTMENU:
@@ -634,6 +604,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case (UINT)View_Window_Message::Show_After_Entering_Event_Loop:
         {
+            draw_window();
             ShowWindow(hwnd, SW_SHOWNORMAL);
             return 0;
         }
@@ -685,8 +656,10 @@ void View_Window::resize_window(int new_width, int new_height, int flags)
     int new_y = 0;
 
     WINDOWPLACEMENT window_info = { 0 };
-
     GetWindowPlacement(hwnd, &window_info);
+
+    if (FAILED(adjust_window_rect(&new_width, &new_height, GetWindowLong(hwnd, GWL_STYLE), GetWindowLong(hwnd, GWL_EXSTYLE))))
+        __debugbreak();
 
     if (window_info.showCmd == SW_MAXIMIZE)
         swp_flags |= SWP_NOSIZE | SWP_NOMOVE;
@@ -756,6 +729,55 @@ File_Info* View_Window::get_current_file_info() const
     return &current_files.data[current_file_index];
 }
 
+void View_Window::draw_window()
+{
+    HRESULT hr = S_OK;
+
+    if (current_image_direct2d == nullptr)
+    {
+        g->BeginDraw();
+        g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+
+        default_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        default_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+
+        g->DrawTextW(L"Please load image", wcslen(L"Please load image"), default_text_format,
+            client_area_as_rectf(), default_text_foreground_brush);
+
+        hr = g->EndDraw();
+    }
+    else
+    {
+        int client_width, client_height;
+        get_client_area(&client_width, &client_height);
+
+        D2D1_SIZE_F image_size = current_image_direct2d->GetSize();
+        float img_hw = (int)image_size.width / 2.0f;
+        float img_hh = (int)image_size.height / 2.0f;
+        float cli_hw = client_width / 2.0f;
+        float cli_hh = client_height / 2.0f;
+
+        D2D1_RECT_F dest_rect = D2D1::RectF(
+            ceilf(cli_hw - img_hw),
+            ceilf(cli_hh - img_hh),
+            ceilf(cli_hw + img_hw),
+            ceilf(cli_hh + img_hh)
+        );
+
+        g->BeginDraw();
+        g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+
+        g->DrawBitmap(current_image_direct2d, dest_rect);
+
+        hr = g->EndDraw();
+    }
+
+    if (FAILED(hr))
+        __debugbreak();
+
+    ValidateRect(hwnd, nullptr);
+}
+
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
@@ -779,4 +801,21 @@ LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         return DefWindowProcW(hwnd, msg, wParam, lParam);
 
     return self->wndproc(hwnd, msg, wParam, lParam);
+}
+
+HRESULT adjust_window_rect(int* width, int* height, DWORD window_flags, DWORD window_flags_ex)
+{
+    E_VERIFY_NULL_R(width, E_INVALIDARG);
+    E_VERIFY_NULL_R(height, E_INVALIDARG);
+
+    RECT size = { 0 };
+    size.right = *width;
+    size.bottom = *height;
+
+    if (!AdjustWindowRectEx(&size, window_flags, false, window_flags_ex))
+        return HRESULT_FROM_WIN32(GetLastError());
+
+    *width = size.right - size.left;
+    *height = size.bottom - size.top;
+    return S_OK;
 }

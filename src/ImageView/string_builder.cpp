@@ -1,5 +1,4 @@
 #include <string.h>
-#include <stdarg.h>
 #include <wchar.h>
 
 #include "string_builder.hpp"
@@ -46,14 +45,26 @@ bool String_Builder::append_format(const wchar_t* format, ...)
 {
     E_VERIFY_NULL_R(format, false);
 
-    va_list ap;
-    va_start(ap, format);
+    va_list args;
+    va_start(args, format);
 
-    int num_chars_required = _vscwprintf(format, ap);
+    bool result = append_format(format, args);
+
+    va_end(args);
+
+    return result;
+}
+
+bool String_Builder::append_format(const wchar_t * format, va_list args)
+{
+    int num_chars_required = _vscwprintf(format, args);
     if (num_chars_required == -1) {
         is_valid = false;
         return false;
     }
+
+    // _vscwprintf doesn't count terminating null, but vswprintf_s prints it.
+    ++num_chars_required; 
 
     if (!ensure_capacity(count + num_chars_required)) {
         is_valid = false;
@@ -63,13 +74,11 @@ bool String_Builder::append_format(const wchar_t* format, ...)
     wchar_t* data = &buffer[count];
     const size_t chars_left = (capacity - count);
 
-    int num_written = vswprintf_s(data, chars_left, format, ap);
+    int num_written = vswprintf_s(data, chars_left, format, args);
     if (num_written != num_chars_required) {
         is_valid = false;
         return false;
     }
-
-    va_end(ap);
 
     count += num_chars_required;
     return true;

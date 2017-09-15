@@ -77,10 +77,7 @@ inline bool Sequence<T>::is_empty() const
 template<typename T>
 inline bool Sequence<T>::is_valid_index(int index) const
 {
-    if (is_empty())
-        return false;
-
-    return index >= 0 && index < count;
+    return !is_empty() && index >= 0 && index < count;
 }
 
 template<typename T>

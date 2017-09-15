@@ -20,6 +20,30 @@ void report_error(const wchar_t * format, ...)
     __debugbreak();
 }
 
+void debug(const wchar_t* format, ...)
+{
+    String_Builder sb;
+    sb.allocator = g_temporary_allocator;
+    sb.is_valid = true;
+    void* prev = g_temporary_allocator->current;
+
+    va_list args;
+    va_start(args, format);
+
+    if (!(sb.append_format(format, args) && sb.append_char(L'\0')))
+    {
+        __debugbreak();
+        va_end(args);
+        g_temporary_allocator->current = prev;
+        return;
+    }
+
+    va_end(args);
+
+    OutputDebugStringW(sb.buffer);
+    g_temporary_allocator->current = prev;
+}
+
 void error_box(HWND hwnd, HRESULT hr)
 {
     String_Builder sb;

@@ -35,3 +35,4 @@
 
 void report_error(const wchar_t* format, ...);
 void error_box(HWND hwnd, HRESULT hr);
+void debug(const wchar_t* format, ...);

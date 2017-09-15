@@ -86,15 +86,13 @@ struct View_Window
     bool release_current_image();
     
     bool handle_open_file_action();
-    int find_file_info_by_path(const String& path);
+    int  find_file_info_by_path(const String& path);
 
     IWICBitmapDecoder* create_decoder_from_file_path(const wchar_t* path);
 
     int enter_message_loop();
     LRESULT __stdcall wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 private:
-    wchar_t title_buffer[512] = { 0 };
-
     //void set_to_default_state(View_Window_State previous_state);
     //void go_to_state(View_Window_State new_state);
     D2D1_RECT_F client_area_as_rectf();
@@ -104,4 +102,5 @@ private:
     void error_box(const wchar_t* message);
 
     File_Info* get_current_file_info() const;
+    void draw_window();
 };

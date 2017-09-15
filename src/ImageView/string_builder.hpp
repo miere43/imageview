@@ -1,6 +1,9 @@
 #pragma once
+#include <stdarg.h>
+
 #include "allocator.hpp"
 #include "string.hpp"
+
 
 struct String_Builder
 {
@@ -16,6 +19,7 @@ struct String_Builder
     bool append_string(const String& string);
     bool append_string(const wchar_t* string);
     bool append_format(const wchar_t* format, ...);
+    bool append_format(const wchar_t* format, va_list args);
 private:
     bool ensure_capacity(int required_capacity);
     inline int find_capacity(int cap) { return cap <= 5 ? 10 : cap * 2; }
