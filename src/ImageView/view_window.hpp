@@ -102,4 +102,6 @@ private:
 
     void error_box(HRESULT hr);
     void error_box(const wchar_t* message);
+
+    File_Info* get_current_file_info() const;
 };

@@ -12,12 +12,13 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
 #ifdef _DEBUG
     HeapSetInformation(0, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
+
     if (!g_temporary_allocator->set_size(32 * 1024)) {
         report_error(L"Unable to initialize temporary allocator.\n");
         return -1;
     }
 
-    if (FAILED(CoInitialize(nullptr))) {
+    if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_SPEED_OVER_MEMORY))) {
         report_error(L"Unable to initialize COM.\n");
         return -1;
     }

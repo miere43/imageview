@@ -1,4 +1,5 @@
 #include <wchar.h>
+#include <shlobj.h>
 
 #include "file_system_utility.hpp"
 #include "error.hpp"
@@ -118,4 +119,29 @@ bool File_System_Utility::extract_file_name_from_path(const String& file_path, S
 
     *file_name = result;
     return true;
+}
+
+HRESULT File_System_Utility::select_file_in_explorer(const String& file)
+{
+    E_VERIFY_R(!String::is_null(file), E_INVALIDARG);
+
+    ITEMIDLIST* item = ILCreateFromPathW(file.data);
+    if (item == nullptr)
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND); // @TODO: is really not found, maybe it's just random error?
+
+    HRESULT hr = SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
+    ILFree(item);
+
+    return hr;
+}
+
+HRESULT File_System_Utility::normalize_path(String& file_path)
+{
+    E_VERIFY_R(!String::is_null(file_path), E_INVALIDARG);
+
+    for (int i = 0; i < file_path.count; ++i)
+        if (file_path.data[i] == L'/')
+            file_path.data[i] = L'\\';
+
+    return S_OK;
 }

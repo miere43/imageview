@@ -26,6 +26,7 @@ enum class View_Hotkey : int
     None = 0,
     View_Prev = 1,
     View_Next = 2,
+    View_Show_File_In_Explorer = 3,
 };
 
 bool View_Window::initialize(const View_Window_Init_Params& params)
@@ -169,7 +170,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     }
 
     // Create render target
-    hr = Graphics_Utility::create_hwnd_render_target((HWND)1, &g);
+    hr = Graphics_Utility::create_hwnd_render_target(hwnd, &g);
     if (FAILED(hr)) {
         error_box(hr);
         return false;
@@ -178,6 +179,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     // Create hotkeys
     RegisterHotKey(hwnd, (int)View_Hotkey::View_Prev, 0, VK_LEFT);
     RegisterHotKey(hwnd, (int)View_Hotkey::View_Next, 0, VK_RIGHT);
+    RegisterHotKey(hwnd, (int)View_Hotkey::View_Show_File_In_Explorer, 0, VK_RETURN);
 
     // Create view menu
     view_menu = CreatePopupMenu();
@@ -647,6 +649,19 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case View_Hotkey::View_Next:
                     view_next();
                     break;
+                case View_Hotkey::View_Show_File_In_Explorer:
+                {
+                    File_Info* current = get_current_file_info();
+                    if (current != nullptr)
+                    {
+                        void* prev = g_temporary_allocator->current;
+                        String abs_path = get_file_info_absolute_path(current_folder, current, g_temporary_allocator);
+                        if (!String::is_null(abs_path) && SUCCEEDED(File_System_Utility::normalize_path(abs_path)))
+                            File_System_Utility::select_file_in_explorer(abs_path);
+                        g_temporary_allocator->current = prev;
+                    }
+                    break;
+                }
             }
 
             return 0;
@@ -732,6 +747,14 @@ void View_Window::error_box(const wchar_t * message)
     else
         MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
     g_temporary_allocator->current = prev;
+}
+
+File_Info* View_Window::get_current_file_info() const
+{
+    if (current_file_index < 0 || current_file_index >= current_files.count)
+        return nullptr;
+
+    return &current_files.data[current_file_index];
 }
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)

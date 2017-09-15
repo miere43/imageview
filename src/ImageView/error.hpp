@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 
 #define E_VERIFY(cond) \
     do { \
@@ -33,3 +34,4 @@
     } while (0)
 
 void report_error(const wchar_t* format, ...);
+void error_box(HWND hwnd, HRESULT hr);
