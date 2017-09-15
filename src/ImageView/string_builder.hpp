@@ -10,6 +10,8 @@ struct String_Builder
     IAllocator* allocator = nullptr;
     bool is_valid = false;
 
+    String_Builder(IAllocator* allocator = g_standard_allocator);
+
     bool append_char(wchar_t c);
     bool append_string(const String& string);
     bool append_string(const wchar_t* string);

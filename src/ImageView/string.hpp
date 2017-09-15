@@ -5,10 +5,18 @@
 struct String
 {
     wchar_t* data = nullptr;
+    // Refers to amount of 16-bit code units in the string, not string length! Surrogate pairs are not counted!
     int count = 0;
 
     String();
     String(wchar_t* data, int count);
+
+    inline wchar_t operator[](size_t i) {
+        return data[i];
+    }
+    inline const wchar_t& operator[](size_t i) const {
+        return data[i];
+    }
 
     int index_of(wchar_t c) const;
     int last_index_of(wchar_t c) const;

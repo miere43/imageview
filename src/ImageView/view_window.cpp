@@ -301,6 +301,9 @@ void View_Window::load_path(const String& file_path)
 
 void View_Window::view_prev()
 {
+    if (current_file_index < 0 || current_files.is_empty())
+        return;
+
     int index = current_file_index - 1;
     if (index >= 0)
         view_file_index(index);
@@ -313,6 +316,8 @@ void View_Window::view_next()
     int index = current_file_index + 1;
     if (index < current_files.count)
         view_file_index(index);
+    else
+        view_file_index(current_files.count - index);
 }
 
 void View_Window::view_file_index(int index)
@@ -351,8 +356,9 @@ void View_Window::update_view_title()
     void* prev = g_temporary_allocator->current;
     title.allocator = g_temporary_allocator;
 
-    title.append_format(L"(%i/%i) %s", current_file_index, current_files.count, current_files.data[current_file_index].path);
+    title.append_format(L"(%i/%i) %s", current_file_index + 1, current_files.count, current_files.data[current_file_index].path);
     title.append_char(L'\0');
+
     if (!title.is_valid) {
         report_error(L"Unable to update title.\n");
         g_temporary_allocator->current = prev;

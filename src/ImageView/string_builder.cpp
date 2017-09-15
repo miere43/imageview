@@ -6,10 +6,15 @@
 #include "error.hpp"
 
 
+String_Builder::String_Builder(IAllocator * allocator)
+{
+    this->allocator = allocator;
+}
+
 bool String_Builder::append_char(wchar_t c)
 {
     if (!ensure_capacity(count + 1)) {
-        is_valid = true;
+        is_valid = false;
         return false;
     }
 
