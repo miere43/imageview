@@ -24,9 +24,9 @@ enum class View_Menu_Item : int
 enum class View_Hotkey : int
 {
     None = 0,
-    View_Prev = 1,
-    View_Next = 2,
-    View_Show_File_In_Explorer = 3,
+    View_Prev = VK_LEFT,
+    View_Next = VK_RIGHT,
+    View_Show_File_In_Explorer = VK_RETURN,
 };
 
 bool View_Window::initialize(const View_Window_Init_Params& params)
@@ -176,11 +176,6 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
         return false;
     }
 
-    // Create hotkeys
-    RegisterHotKey(hwnd, (int)View_Hotkey::View_Prev, 0, VK_LEFT);
-    RegisterHotKey(hwnd, (int)View_Hotkey::View_Next, 0, VK_RIGHT);
-    RegisterHotKey(hwnd, (int)View_Hotkey::View_Show_File_In_Explorer, 0, VK_RETURN);
-
     // Create view menu
     view_menu = CreatePopupMenu();
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Open_File, L"Open...");
@@ -323,9 +318,7 @@ void View_Window::view_next()
 void View_Window::view_file_index(int index)
 {
     E_VERIFY(index >= 0);
-    if (current_file_index < 0)
-        return;
-    if (index > current_files.count)
+    if (!current_files.is_valid_index(index))
         return;
 
     release_current_image();
@@ -644,7 +637,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ShowWindow(hwnd, SW_SHOWNORMAL);
             return 0;
         }
-        case WM_HOTKEY:
+        case WM_KEYDOWN:
         {
             View_Hotkey hotkey = (View_Hotkey)wParam;
             switch (hotkey)
@@ -757,7 +750,7 @@ void View_Window::error_box(const wchar_t * message)
 
 File_Info* View_Window::get_current_file_info() const
 {
-    if (current_file_index < 0 || current_file_index >= current_files.count)
+    if (!current_files.is_valid_index(current_file_index))
         return nullptr;
 
     return &current_files.data[current_file_index];

@@ -19,6 +19,7 @@ struct Sequence
     bool reserve(int reserve_capacity);
 
     bool is_empty() const;
+    bool is_valid_index(int index) const;
 private:
     int  find_capacity(int cap);
     bool ensure_capacity(int required_capacity);
@@ -71,6 +72,15 @@ template<typename T>
 inline bool Sequence<T>::is_empty() const
 {
     return data == nullptr || count <= 0;
+}
+
+template<typename T>
+inline bool Sequence<T>::is_valid_index(int index) const
+{
+    if (is_empty())
+        return false;
+
+    return index >= 0 && index < count;
 }
 
 template<typename T>
