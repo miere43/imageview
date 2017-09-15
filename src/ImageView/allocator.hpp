@@ -9,9 +9,9 @@ struct IAllocator
 
 struct Standard_Allocator : public IAllocator
 {
-    void* allocate(size_t size) override;
-    void* reallocate(void* block, size_t new_size) override;
-    void  deallocate(void* block) override;
+    virtual void* allocate(size_t size) override final;
+    virtual void* reallocate(void* block, size_t new_size) override final;
+    virtual void  deallocate(void* block) override final;
 };
 
 struct Temporary_Allocator : public IAllocator
@@ -30,9 +30,9 @@ struct Temporary_Allocator : public IAllocator
     bool set_size(size_t new_size);
     bool clear();
 
-    void* allocate(size_t size) override;
-    void* reallocate(void * block, size_t new_size) override;
-    void  deallocate(void* block) override;
+    virtual void* allocate(size_t size) override final;
+    virtual void* reallocate(void * block, size_t new_size) override final;
+    virtual void  deallocate(void* block) override final;
 };
 
 extern Standard_Allocator* g_standard_allocator;

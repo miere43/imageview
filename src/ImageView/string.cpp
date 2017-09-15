@@ -114,7 +114,7 @@ String String::substring(int start, int length, IAllocator* allocator) const
     if (String::is_null(result))
         return String::null;
 
-    memcpy(result.data, &data[start], length * sizeof(wchar_t));
+    wmemcpy(result.data, &data[start], length);
     result.data[length] = L'\0';
 
     return result;
@@ -143,9 +143,7 @@ String String::duplicate(const wchar_t* string, int string_length, IAllocator* a
     if (is_null(new_string))
         return String::null;
 
-    for (int i = 0; i < string_length; ++i)
-        new_string.data[i] = string[i];
-    
+    wmemcpy(new_string.data, string, string_length);
     new_string.data[string_length] = L'\0';
     return new_string;
 }
@@ -173,10 +171,10 @@ String String::join(wchar_t seperator, const String string_array[], size_t strin
     wchar_t* data = result.data;
     for (size_t i = 0; i < string_array_length; ++i)
     {
-        const String* s = &string_array[i];
+        const String* string_to_join = &string_array[i];
 
-        memcpy(data, s->data, sizeof(wchar_t) * s->count);
-        data += s->count;
+        wmemcpy(data, string_to_join->data, string_to_join->count);
+        data += string_to_join->count;
 
         if (i != string_array_length - 1)
             *data++ = seperator;

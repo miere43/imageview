@@ -17,6 +17,8 @@ const wchar_t * hresult_to_string(HRESULT hr)
         VAL(E_OUTOFMEMORY, "Failed to allocate necessary memory");
         VAL(E_INVALIDARG, "One or more arguments are not valid");
 
+        VAL(__HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE), "Invalid window handle");
+
         // Wincodec
         VAL(WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT, "The pixel format is not supported"); // same as D2DERR_UNSUPPORTED_PIXEL_FORMAT
 

@@ -33,12 +33,27 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     if (initialized)
         return true;
 
+    // Assign graphics resources
+    wic = params.wic;
+    d2d1 = params.d2d1;
+    dwrite = params.dwrite;
+
+    if (wic == nullptr || d2d1 == nullptr || dwrite == nullptr)
+    {
+        error_box(L"One or more graphics objects are not assigned.\n");
+        return false;
+    }
+
+    wic->AddRef();
+    d2d1->AddRef();
+    dwrite->AddRef();
+
     HINSTANCE hInstance = GetModuleHandleW(0);
     HRESULT hr = 0;
 
+    // Register window class
     ATOM atom = 0;
     {
-        // Register window class
         WNDCLASSEX wc = { 0 };
         wc.cbSize = sizeof(wc);
         wc.hCursor = LoadCursorW(0, IDC_ARROW);
@@ -51,7 +66,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
 
         atom = RegisterClassExW(&wc);
         if (atom == 0) {
-            report_error(L"Unable to register window class.\n");
+            error_box(L"Unable to register window class.\n");
             return false;
         }
     }
@@ -77,7 +92,6 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
     // Get desktop size
     int window_x = params.window_x;
     int window_y = params.window_y;
-
     {
         HMONITOR primary_monitor = MonitorFromPoint({ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO monitor_info;
@@ -95,7 +109,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
             }
             else
             {
-                report_error(L"Unable to get full desktop size.\n");
+                error_box(L"Unable to get full desktop size.\n");
             }
 
             int desktop_work_width = monitor_info.rcWork.right - monitor_info.rcMonitor.left;
@@ -108,7 +122,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
             }
             else
             {
-                report_error(L"Unable to get desktop work size.\n");
+                error_box(L"Unable to get desktop work size.\n");
             }
         }
         else
@@ -143,35 +157,21 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
         &create_struct);
 
     if (hwnd == 0) {
-        report_error(L"Unable to create window.");
+        error_box(L"Unable to create window.");
         return false;
     }
 
     SetLastError(0);
     SetWindowLongPtrW(hwnd, 0, (LONG_PTR)this);
     if (GetLastError() != 0) {
-        report_error(L"Unable to set window data.\n");
+        error_box(L"Unable to set window data.\n");
         return false;
     }
-
-    // Initialize graphics resources
-    wic = params.wic;
-    d2d1 = params.d2d1;
-    dwrite = params.dwrite;
-
-    if (wic == nullptr || d2d1 == nullptr || dwrite == nullptr) {
-        report_error(L"One or more graphics objects are not assigned.\n");
-        return false;
-    }
-
-    wic->AddRef();
-    d2d1->AddRef();
-    dwrite->AddRef();
 
     // Create render target
-    hr = Graphics_Utility::create_hwnd_render_target(hwnd, &g);
+    hr = Graphics_Utility::create_hwnd_render_target((HWND)1, &g);
     if (FAILED(hr)) {
-        report_error(L"Unable to create window render target.\n");
+        error_box(hr);
         return false;
     }
 
@@ -266,18 +266,20 @@ static bool image_filter(const WIN32_FIND_DATA& data, void* userdata)
 
 void View_Window::load_path(const String& file_path)
 {
+    HRESULT hr = 0;
+
     String folder_path;
-    if (!File_System_Utility::extract_folder_path(file_path, &folder_path))
+    hr = File_System_Utility::extract_folder_path(file_path, &folder_path);
+    if (FAILED(hr))
         __debugbreak();
 
-    Folder_Files files;
-    bool ok = File_System_Utility::get_folder_files(&files, folder_path.data, image_filter, nullptr);
-
-    if (!ok)
+    Sequence<File_Info> files;
+    hr = File_System_Utility::get_folder_files(&files, folder_path, image_filter, nullptr);
+    if (FAILED(hr))
         __debugbreak();
 
     current_folder = folder_path;
-    current_files = files.files;
+    current_files = files;
     current_file_index = 0;
 
     void* prev = g_temporary_allocator->current;
@@ -351,6 +353,7 @@ void View_Window::update_view_title()
     title.append_char(L'\0');
     if (!title.is_valid) {
         report_error(L"Unable to update title.\n");
+        g_temporary_allocator->current = prev;
         return;
     }
 
@@ -691,6 +694,44 @@ void View_Window::resize_window(int new_width, int new_height, int flags)
     }
 
     SetWindowPos(hwnd, 0, new_x, new_y, new_width, new_height, swp_flags);
+}
+
+void View_Window::error_box(HRESULT hr)
+{
+    String_Builder sb;
+    sb.allocator = g_temporary_allocator;
+    sb.is_valid = true;
+    void* prev = g_temporary_allocator->current;
+
+    sb.append_string(L"Error: ");
+    sb.append_string(hresult_to_string(hr));
+    sb.append_string(L"\n\n");
+    sb.append_format(L"HRESULT: %#010x", hr);
+    sb.append_char(L'\0');
+
+    if (!sb.is_valid)
+        MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
+    else
+        MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
+    g_temporary_allocator->current = prev;
+}
+
+void View_Window::error_box(const wchar_t * message)
+{   
+    String_Builder sb;
+    sb.allocator = g_temporary_allocator;
+    sb.is_valid = true;
+    void* prev = g_temporary_allocator->current;
+
+    sb.append_string(L"Error: ");
+    sb.append_string(message);
+    sb.append_char(L'\0');
+
+    if (!sb.is_valid)
+        MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
+    else
+        MessageBoxW(hwnd, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
+    g_temporary_allocator->current = prev;
 }
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)

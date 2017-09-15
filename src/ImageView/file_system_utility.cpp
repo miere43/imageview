@@ -1,37 +1,38 @@
+#include <wchar.h>
+
 #include "file_system_utility.hpp"
 #include "error.hpp"
 #include "string.hpp"
 
-bool File_System_Utility::get_folder_files(
-    Folder_Files* output,
-    const wchar_t* folder_path,
+
+HRESULT File_System_Utility::get_folder_files(
+    Sequence<File_Info>* output,
+    const String& folder_path,
     Get_Folder_Files_Filter filter, 
     void* userdata,
     IAllocator* file_allocator)
 {
-    E_VERIFY_R(output, false);
-    E_VERIFY_NULL_R(folder_path, false);
-    E_VERIFY_NULL_R(filter, false);
-    E_VERIFY_NULL_R(file_allocator, false);
+    E_VERIFY_R(output, E_INVALIDARG);
+    E_VERIFY_NULL_R(filter, E_INVALIDARG);
+    E_VERIFY_NULL_R(file_allocator, E_INVALIDARG);
 
     if (!folder_exists(folder_path))
-        return false;
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
 
-    String folder_path_i = String::reference_to_const_wchar_t(folder_path);
-    bool ends_with_slash = folder_path_i.ends_with('/');
+    bool ends_with_slash = folder_path.ends_with('/');
     if (!ends_with_slash)
-        ends_with_slash = folder_path_i.ends_with('\\');
+        ends_with_slash = folder_path.ends_with('\\');
 
-    size_t path_size = folder_path_i.calc_size() + (ends_with_slash * sizeof(wchar_t)) + (sizeof(wchar_t) * 2);
+    size_t path_size = folder_path.calc_size() + (ends_with_slash * sizeof(wchar_t)) + (sizeof(wchar_t) * 2);
     
     void* prev_temp_current = g_temporary_allocator->current;
     wchar_t* temp_folder_path = (wchar_t*)g_temporary_allocator->allocate(path_size);
 
     if (temp_folder_path == nullptr)
-        return false;
+        return E_OUTOFMEMORY;
 
-    memcpy_s(temp_folder_path, path_size, folder_path_i.data, folder_path_i.calc_size_no_zero_terminator());
-    int char_index = folder_path_i.count;
+    memcpy_s(temp_folder_path, path_size, folder_path.data, folder_path.calc_size_no_zero_terminator());
+    int char_index = folder_path.count;
     if (!ends_with_slash)
         temp_folder_path[char_index++] = L'\\';
     temp_folder_path[char_index++] = L'*';
@@ -42,10 +43,9 @@ bool File_System_Utility::get_folder_files(
     g_temporary_allocator->current = prev_temp_current;
 
     if (search_handle == INVALID_HANDLE_VALUE)
-        return false;
+        return E_HANDLE;
 
     Sequence<File_Info> files;
-
     while (FindNextFileW(search_handle, &file))
     {
         if (filter(file, userdata))
@@ -63,23 +63,21 @@ bool File_System_Utility::get_folder_files(
     }
 
     FindClose(search_handle);
+    *output = files;
 
-    output->folder_path = folder_path;
-    output->files = files;
-
-    return true;
+    return S_OK;
 }
 
-bool File_System_Utility::folder_exists(const wchar_t * folder_path)
+bool File_System_Utility::folder_exists(const String& folder_path)
 {
-    DWORD a = GetFileAttributesW(folder_path);
+    DWORD a = GetFileAttributesW(folder_path.data);
     return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-bool File_System_Utility::extract_folder_path(const String& file_path, String* folder_path, IAllocator* folder_path_allocator)
+HRESULT File_System_Utility::extract_folder_path(const String& file_path, String* folder_path, IAllocator* folder_path_allocator)
 {
-    E_VERIFY_NULL_R(folder_path, false);
-    E_VERIFY_NULL_R(folder_path_allocator, false);
+    E_VERIFY_NULL_R(folder_path, E_INVALIDARG);
+    E_VERIFY_NULL_R(folder_path_allocator, E_INVALIDARG);
     
     if (String::is_null_or_empty(file_path))
         return false;
@@ -94,13 +92,13 @@ bool File_System_Utility::extract_folder_path(const String& file_path, String* f
 
     String result = String::allocate_string_of_length(slash_index, folder_path_allocator);
     if (String::is_null(result))
-        return false;
+        return E_OUTOFMEMORY;
 
-    memcpy_s(result.data, result.calc_size(), file_path.data, (slash_index) * sizeof(wchar_t));
+    wmemcpy(result.data, file_path.data, slash_index);
     result.data[result.count] = L'\0';
 
     *folder_path = result;
-    return true;
+    return S_OK;
 }
 
 bool File_System_Utility::extract_file_name_from_path(const String& file_path, String* file_name, IAllocator* allocator)

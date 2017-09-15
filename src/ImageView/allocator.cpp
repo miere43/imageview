@@ -70,9 +70,9 @@ void* Temporary_Allocator::allocate(size_t size)
     return (void*)new_block;
 }
 
-void * Temporary_Allocator::reallocate(void * block, size_t new_size)
+void* Temporary_Allocator::reallocate(void* block, size_t new_size)
 {
-    E_VERIFY_R(false, nullptr);
+    return block;
 }
 
 void Temporary_Allocator::deallocate(void * block)

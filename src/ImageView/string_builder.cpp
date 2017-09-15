@@ -26,7 +26,7 @@ bool String_Builder::append_string(const String& string)
     if (String::is_null_or_empty(string))
         return true;
 
-    memcpy(&buffer[count], string.data, sizeof(wchar_t) * string.count);
+    wmemcpy(&buffer[count], string.data, string.count);
     count += string.count;
 
     return true;

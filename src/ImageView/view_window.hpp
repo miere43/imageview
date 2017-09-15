@@ -99,4 +99,7 @@ private:
     //void go_to_state(View_Window_State new_state);
     D2D1_RECT_F client_area_as_rectf();
     void resize_window(int new_width, int new_height, int flags);
+
+    void error_box(HRESULT hr);
+    void error_box(const wchar_t* message);
 };
