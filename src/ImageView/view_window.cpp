@@ -492,60 +492,29 @@ int View_Window::find_file_info_by_path(const String& path)
 #pragma region Sort functions
 typedef int(__cdecl *QSort_Func)(const void* a, const void* b);
 
-int sort_by_name_asc(const File_Info* a, const File_Info* b)
-{
-    int i = wcsncmp(a->path.data, b->path.data, max(a->path.count, b->path.count));
-    if (i < 0) return -1;
-    if (i > 0) return 1;
-    return 0;
+int sort_by_name_asc(const File_Info* a, const File_Info* b) {
+    return wcsncmp(a->path.data, b->path.data, max(a->path.count, b->path.count));
 }
-
-int sort_by_name_desc(const File_Info* a, const File_Info* b)
-{
-    int i = wcsncmp(a->path.data, b->path.data, max(a->path.count, b->path.count));
-    if (i < 0) return 1;
-    if (i > 0) return -1;
-    return 0;
+int sort_by_name_desc(const File_Info* a, const File_Info* b) {
+    return -1 * wcsncmp(a->path.data, b->path.data, max(a->path.count, b->path.count));
 }
-
-int sort_by_date_created_asc(const File_Info* a, const File_Info* b)
-{
+int sort_by_date_created_asc(const File_Info* a, const File_Info* b) {
     return CompareFileTime(&a->date_created, &b->date_created);
 }
-
-int sort_by_date_created_desc(const File_Info* a, const File_Info* b)
-{
-    LONG cmp = CompareFileTime(&a->date_created, &b->date_created);
-    if (cmp < 0) return 1;
-    if (cmp > 0) return -1;
-    return 0;
+int sort_by_date_created_desc(const File_Info* a, const File_Info* b) {
+    return -1 * CompareFileTime(&a->date_created, &b->date_created);
 }
-
-int sort_by_date_accessed_asc(const File_Info* a, const File_Info* b)
-{
+int sort_by_date_accessed_asc(const File_Info* a, const File_Info* b) {
     return CompareFileTime(&a->date_accessed, &b->date_accessed);
 }
-
-int sort_by_date_accessed_desc(const File_Info* a, const File_Info* b)
-{
-    LONG cmp = CompareFileTime(&a->date_accessed, &b->date_accessed);
-    if (cmp < 0) return 1;
-    if (cmp > 0) return -1;
-    return 0;
+int sort_by_date_accessed_desc(const File_Info* a, const File_Info* b) {
+    return -1 * CompareFileTime(&a->date_accessed, &b->date_accessed);
 }
-
-int sort_by_date_modified_asc(const File_Info* a, const File_Info* b)
-{
-    // returns -1, 0 or 1
+int sort_by_date_modified_asc(const File_Info* a, const File_Info* b) {
     return CompareFileTime(&a->date_modified, &b->date_modified);
 }
-
-int sort_by_date_modified_desc(const File_Info* a, const File_Info* b)
-{
-    LONG cmp = CompareFileTime(&a->date_modified, &b->date_modified);
-    if (cmp < 0) return 1;
-    if (cmp > 0) return -1;
-    return 0;
+int sort_by_date_modified_desc(const File_Info* a, const File_Info* b) {
+    return -1 * CompareFileTime(&a->date_modified, &b->date_modified);
 }
 
 // These functions MUST be in order as in Sort_Mode enum.
