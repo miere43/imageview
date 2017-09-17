@@ -1,5 +1,6 @@
 ﻿#include <Windows.h>
 #include <windowsx.h>
+#include <stdlib.h>
 #include <wchar.h>
 #include <math.h>
 
@@ -274,12 +275,14 @@ void View_Window::load_path(const String& file_path)
 
     current_folder = folder_path;
     current_files = files;
-    current_file_index = 0;
+    current_file_index = -1;
 
     Temporary_Allocator_Guard g;
     String file_name;
     if (!File_System_Utility::extract_file_name_from_path(file_path, &file_name, g_temporary_allocator))
         __debugbreak();
+
+    sort_current_images(Sort_Mode::Date_Created, Sort_Order::Descending);
 
     int index = find_file_info_by_path(file_name);
     if (index == -1)
@@ -337,9 +340,7 @@ void View_Window::view_file_index(int index)
         return;
 
     if (set_current_image(decoder))
-    {
         update_view_title();
-    }
 }
 
 void View_Window::update_view_title()
@@ -486,6 +487,112 @@ int View_Window::find_file_info_by_path(const String& path)
     }
 
     return -1;
+}
+
+#pragma region Sort functions
+typedef int(__cdecl *QSort_Func)(const void* a, const void* b);
+
+int sort_by_name_asc(const File_Info* a, const File_Info* b)
+{
+    int i = wcsncmp(a->path.data, b->path.data, max(a->path.count, b->path.count));
+    if (i < 0) return -1;
+    if (i > 0) return 1;
+    return 0;
+}
+
+int sort_by_name_desc(const File_Info* a, const File_Info* b)
+{
+    int i = wcsncmp(a->path.data, b->path.data, max(a->path.count, b->path.count));
+    if (i < 0) return 1;
+    if (i > 0) return -1;
+    return 0;
+}
+
+int sort_by_date_created_asc(const File_Info* a, const File_Info* b)
+{
+    return CompareFileTime(&a->date_created, &b->date_created);
+}
+
+int sort_by_date_created_desc(const File_Info* a, const File_Info* b)
+{
+    LONG cmp = CompareFileTime(&a->date_created, &b->date_created);
+    if (cmp < 0) return 1;
+    if (cmp > 0) return -1;
+    return 0;
+}
+
+int sort_by_date_accessed_asc(const File_Info* a, const File_Info* b)
+{
+    return CompareFileTime(&a->date_accessed, &b->date_accessed);
+}
+
+int sort_by_date_accessed_desc(const File_Info* a, const File_Info* b)
+{
+    LONG cmp = CompareFileTime(&a->date_accessed, &b->date_accessed);
+    if (cmp < 0) return 1;
+    if (cmp > 0) return -1;
+    return 0;
+}
+
+int sort_by_date_modified_asc(const File_Info* a, const File_Info* b)
+{
+    // returns -1, 0 or 1
+    return CompareFileTime(&a->date_modified, &b->date_modified);
+}
+
+int sort_by_date_modified_desc(const File_Info* a, const File_Info* b)
+{
+    LONG cmp = CompareFileTime(&a->date_modified, &b->date_modified);
+    if (cmp < 0) return 1;
+    if (cmp > 0) return -1;
+    return 0;
+}
+
+// These functions MUST be in order as in Sort_Mode enum.
+// Ascending first, descending second.
+static QSort_Func sort_funcs[]
+{
+    (QSort_Func)sort_by_name_asc,
+    (QSort_Func)sort_by_date_created_asc,
+    (QSort_Func)sort_by_date_accessed_asc,
+    (QSort_Func)sort_by_date_modified_asc,
+
+    (QSort_Func)sort_by_name_desc,
+    (QSort_Func)sort_by_date_created_desc,
+    (QSort_Func)sort_by_date_accessed_desc,
+    (QSort_Func)sort_by_date_modified_desc,
+};
+#pragma endregion
+
+HRESULT View_Window::sort_current_images(Sort_Mode mode, Sort_Order order)
+{
+    E_VERIFY_R(mode >= Sort_Mode::Name || mode <= Sort_Mode::Date_Modified, E_INVALIDARG);
+    E_VERIFY_R(order >= Sort_Order::Ascending || order <= Sort_Order::Descending, E_INVALIDARG);
+
+    if (current_files.data == nullptr || current_files.count <= 1)
+        return S_OK;
+
+    File_Info* current = get_current_file_info();
+    QSort_Func sort_func = sort_funcs[((int)order * (int)Sort_Mode::NUM_MODES) + (int)mode];
+
+    if (sort_func != nullptr)
+        qsort(current_files.data, current_files.count, sizeof(current_files.data[0]), sort_func);
+
+    if (current != nullptr) {
+        for (int i = 0; i < current_files.count; ++i)
+        {
+            if (&current_files.data[i] == current)
+            {
+                current_file_index = i;
+                break;
+            }
+        }
+    }
+
+    //sort_mode = mode;
+    //sort_order = order;
+
+    return S_OK;
 }
 
 IWICBitmapDecoder* View_Window::create_decoder_from_file_path(const wchar_t* path)

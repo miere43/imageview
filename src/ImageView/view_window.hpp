@@ -26,6 +26,24 @@ struct View_Window_Init_Params
     bool show_after_entering_event_loop = false;
 };
 
+// Don't change enum values! Used in View_Window::sort_current_images
+// When adding another one, fix View_Window::sort_current_images.
+enum class Sort_Mode
+{
+    Name = 0,
+    Date_Created = 1,
+    Date_Accessed = 2,
+    Date_Modified = 3,
+    NUM_MODES
+};
+
+// Don't change enum values! Used in View_Window::sort_current_images
+enum class Sort_Order
+{
+    Ascending = 0,
+    Descending = 1,
+};
+
 struct View_Window
 {
     enum View_Window_State
@@ -59,6 +77,9 @@ struct View_Window
 
     ID2D1Bitmap* current_image_direct2d = nullptr;
     IWICBitmapDecoder* decoder = nullptr;
+    
+    //Sort_Mode sort_mode = Sort_Mode::Undefined;
+    //Sort_Order sort_order = Sort_Order::Undefined;
 
     //
     int desktop_width = 800;
@@ -88,6 +109,7 @@ struct View_Window
     bool handle_open_file_action();
     int  find_file_info_by_path(const String& path);
 
+    HRESULT sort_current_images(Sort_Mode mode, Sort_Order order);
     IWICBitmapDecoder* create_decoder_from_file_path(const wchar_t* path);
 
     int enter_message_loop();

@@ -7,12 +7,12 @@
 
 struct File_Info
 {
-    String path;
     DWORD file_attributes = 0;
-    FILETIME creation_time{ 0 };
-    FILETIME last_access_time{ 0 };
-    FILETIME last_write_time{ 0 };
-    DWORD file_size = 0;
+    FILETIME date_created = { 0 };
+    FILETIME date_accessed = { 0 };
+    FILETIME date_modified = { 0 };
+    unsigned __int64 file_size = 0;
+    String path;
 };
 
 typedef bool(*Get_Folder_Files_Filter)(const WIN32_FIND_DATA& file_data, void* userdata);

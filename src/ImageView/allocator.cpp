@@ -80,7 +80,7 @@ void Temporary_Allocator::deallocate(void * block)
     // I don't care.
 }
 
-Temporary_Allocator_Guard::Temporary_Allocator_Guard(Temporary_Allocator * allocator)
+Temporary_Allocator_Guard::Temporary_Allocator_Guard(Temporary_Allocator* allocator)
     : allocator(allocator)
 {
     E_VERIFY_NULL(allocator);

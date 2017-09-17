@@ -39,7 +39,7 @@ HRESULT File_System_Utility::get_folder_files(
     temp_folder_path[char_index++] = L'*';
     temp_folder_path[char_index] = L'\0';
 
-    WIN32_FIND_DATA file;
+    WIN32_FIND_DATAW file;
     HANDLE search_handle = FindFirstFileExW(temp_folder_path, FindExInfoBasic, &file, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
 
     if (search_handle == INVALID_HANDLE_VALUE)
@@ -51,12 +51,21 @@ HRESULT File_System_Utility::get_folder_files(
         if (filter(file, userdata))
         {
             File_Info info;
-            info.path = String::duplicate(file.cFileName, (int)wcslen(file.cFileName));
+
+#define DO_UNSAFE_COPY
+#ifdef DO_UNSAFE_COPY
+            // Memcpy fields directly from find data struct
+            memcpy(&info + offsetof(File_Info, file_attributes),
+                   &file + offsetof(WIN32_FIND_DATAW, dwFileAttributes),
+                   sizeof(DWORD) + sizeof(FILETIME) * 3 + sizeof(DWORD) * 2);
+#else
             info.file_attributes = file.dwFileAttributes;
-            info.creation_time = file.ftCreationTime;
-            info.last_access_time = file.ftLastAccessTime;
-            info.last_write_time = file.ftLastWriteTime;
+            info.date_created = file.ftCreationTime;
+            info.date_accessed = file.ftLastAccessTime;
+            info.date_modified = file.ftLastWriteTime;
             info.file_size = file.nFileSizeLow;
+#endif
+            info.path = String::duplicate(file.cFileName, (int)wcslen(file.cFileName));
 
             files.push_back(info);
         }
