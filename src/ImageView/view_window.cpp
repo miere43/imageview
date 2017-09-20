@@ -29,6 +29,7 @@ enum class View_Menu_Item : int
     Open_File = 1,
     Quit_App = 2,
     Change_Display_Mode = 3,
+    Copy_Filename_To_Clipboard = 4,
 };
 
 enum class View_Hotkey : int
@@ -178,7 +179,9 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
     view_menu = CreatePopupMenu();
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Open_File, L"Open...");
     AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
-    AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Change_Display_Mode, L"Go fullscreen");
+    AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Change_Display_Mode, L"Enter fullscreen");
+    AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
+    AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Copy_Filename_To_Clipboard, L"Copy filename to clipboard");
     AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Quit_App, L"Quit");
 
@@ -587,6 +590,67 @@ void View_Window::handle_change_display_mode_menu_item()
         LOG_HRESULT_ERROR(hr, L"Unable to change display mode to %d", static_cast<int>(display_mode));
 }
 
+void View_Window::handle_copy_filename_to_clipboard_menu_item()
+{
+    File_Info* current = get_current_file_info();
+    if (current == nullptr)
+    {
+        MessageBoxW(hwnd, L"No image is loaded.", L"Error", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    const String& filename = current->path;
+    if (String::is_null_or_empty(filename))
+    {
+        MessageBoxW(hwnd, L"Filename is invalid.", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    BOOL result;
+    result = OpenClipboard(hwnd);
+    if (!result)
+    {
+        LOG_LAST_WIN32_ERROR(L"Cannot open clipboard");
+        MessageBoxW(hwnd, L"Cannot open clipboard", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+    EmptyClipboard();
+    
+    defer (CloseClipboard());
+
+    HGLOBAL clip_store = GlobalAlloc(GMEM_MOVEABLE, sizeof(wchar_t) * (filename.count + 1));
+    if (clip_store == nullptr)
+    {
+        LOG_LAST_WIN32_ERROR(L"Cannot allocate enough memory to save a string");
+        return;
+    }
+
+    wchar_t* clip_data = (wchar_t*)GlobalLock(clip_store);
+    if (clip_data == nullptr)
+    {
+        LOG_LAST_WIN32_ERROR(L"Unable to lock global memory");
+        return;
+    }
+    defer (GlobalUnlock(clip_store));
+    
+    wmemcpy(clip_data, filename.data, filename.count);
+    clip_data[filename.count] = L'\0';
+
+    result = GlobalUnlock(clip_store);
+    DWORD last_error = GetLastError();
+    if (last_error != NO_ERROR)
+    {
+        LOG_WIN32_ERROR(last_error, L"Unable to unlock global memory");
+        return;
+    }
+
+    if (0 == SetClipboardData(CF_UNICODETEXT, clip_store))
+    {
+        LOG_LAST_WIN32_ERROR(L"Unable to set clipboard data");
+        return;
+    }
+}
+
 int View_Window::find_file_info_by_path(const String& path)
 {
     if (String::is_null_or_empty(path))
@@ -917,6 +981,9 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     break;
                 case View_Menu_Item::Change_Display_Mode:
                     handle_change_display_mode_menu_item();
+                    break;
+                case View_Menu_Item::Copy_Filename_To_Clipboard:
+                    handle_copy_filename_to_clipboard_menu_item();
                     break;
                 default:
                    E_DEBUGBREAK(); // Unknown item

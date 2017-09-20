@@ -140,7 +140,8 @@ struct View_Window
     // Menus
     bool handle_open_file_action();
     void handle_change_display_mode_menu_item();
-    
+    void handle_copy_filename_to_clipboard_menu_item();
+
     int  find_file_info_by_path(const String& path);
 
     // Scaling
