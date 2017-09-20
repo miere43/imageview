@@ -79,6 +79,8 @@ struct View_Window
     bool run_message_loop = false;
     bool initialized = false;
 
+    HACCEL kb_accel = 0;
+
     String current_folder;
     Sequence<File_Info> current_files;
     int current_file_index = -1;

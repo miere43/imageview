@@ -150,7 +150,6 @@
     <ClCompile Include="file_system_utility.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="graphics_utility.cpp" />
-    <ClCompile Include="settings.cpp" />
     <ClCompile Include="string.cpp" />
     <ClCompile Include="string_builder.cpp" />
     <ClCompile Include="view_window.cpp" />
@@ -168,7 +167,6 @@
     <ClInclude Include="sequence.hpp" />
     <ClInclude Include="math.hpp" />
     <ClInclude Include="graphics_utility.hpp" />
-    <ClInclude Include="settings.hpp" />
     <ClInclude Include="string.hpp" />
     <ClInclude Include="string_builder.hpp" />
     <ClInclude Include="view_window.hpp" />

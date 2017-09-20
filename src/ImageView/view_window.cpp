@@ -1,5 +1,6 @@
 ﻿#include <Windows.h>
 #include <windowsx.h>
+#include <shlwapi.h>
 #include <stdlib.h>
 #include <wchar.h>
 #include <math.h>
@@ -8,6 +9,8 @@
 #include "view_window.hpp"
 #include "defer.hpp"
 #include "error.hpp"
+
+#pragma comment(lib, "Shlwapi.lib")
 
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -31,14 +34,23 @@ enum class View_Menu_Item : int
     Change_Display_Mode = 3,
     Copy_Filename_To_Clipboard = 4,
 };
+//
+//enum class View_Hotkey : int
+//{
+//    None = 0,
+//    View_Prev = VK_LEFT,
+//    View_Next = VK_RIGHT,
+//    View_Show_File_In_Explorer = VK_RETURN,
+//    Fast_Quit = VK_ESCAPE,
+//};
 
-enum class View_Hotkey : int
+enum class View_Key : WORD
 {
     None = 0,
-    View_Prev = VK_LEFT,
-    View_Next = VK_RIGHT,
-    View_Show_File_In_Explorer = VK_RETURN,
-    Fast_Quit = VK_ESCAPE,
+    View_Prev = 1,
+    View_Next = 2,
+    View_Show_File_In_Explorer = 3,
+    Fast_Quit = 4,
 };
 
 bool View_Window::initialize(const View_Window_Init_Params& params, String command_line)
@@ -208,7 +220,19 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
     // @TODO: read from settings.
     set_scaling_mode(Scaling_Mode::Fit_To_Window, 1.0f);
 
+    // Initialize keyboard accelerator
+    {
+        static ACCEL accels[] = {
+            { FVIRTKEY, VK_LEFT, (WORD)View_Key::View_Prev },
+            { FVIRTKEY, VK_RIGHT, (WORD)View_Key::View_Next },
+            { FVIRTKEY, VK_RETURN, (WORD)View_Key::View_Show_File_In_Explorer },
+            { FVIRTKEY, VK_ESCAPE, (WORD)View_Key::Fast_Quit },
+        };
 
+        kb_accel = CreateAcceleratorTableW(accels, ARRAYSIZE(accels));
+        if (kb_accel == 0)
+            LOG_LAST_WIN32_ERROR(L"Unable to create keyboard accelerator table");
+    }
 
     if (num_args > 1)
     {
@@ -234,6 +258,12 @@ bool View_Window::shutdown()
     safe_release(decoder);
 
     discard_graphics_resources();
+
+    if (kb_accel != 0)
+    {
+        DestroyAcceleratorTable(kb_accel);
+        kb_accel = 0;
+    }
 
     DestroyWindow(hwnd);
     hwnd = 0;
@@ -889,7 +919,15 @@ HRESULT View_Window::create_decoder_from_file_path(const String& file_path, IWIC
     E_VERIFY_R(!String::is_null_or_empty(file_path), E_INVALIDARG);
     E_VERIFY_NULL_R(decoder, E_INVALIDARG);
 
-    return wic->CreateDecoderFromFilename(file_path.data, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder);
+    HRESULT hr;
+    IStream* stream = nullptr;
+    hr = SHCreateStreamOnFileEx(file_path.data, STGM_READ, FILE_ATTRIBUTE_NORMAL, false, nullptr, &stream);
+    if (FAILED(hr))
+        return hr;
+    defer (safe_release(stream));
+
+    hr = wic->CreateDecoderFromStream(stream, nullptr, WICDecodeMetadataCacheOnDemand, decoder);
+    return hr;
 }
 
 int View_Window::enter_message_loop()
@@ -910,8 +948,11 @@ int View_Window::enter_message_loop()
         if (msg.message == WM_QUIT)
             break;
         
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+        if (!TranslateAcceleratorW(hwnd, kb_accel, &msg))
+        {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
 
     return msg.message == WM_QUIT ? (int)msg.wParam : 0;
@@ -1001,18 +1042,23 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ShowWindow(hwnd, SW_SHOWNORMAL);
             return 0;
         }
-        case WM_KEYDOWN:
+        case WM_COMMAND:
         {
-            View_Hotkey hotkey = (View_Hotkey)wParam;
-            switch (hotkey)
+            bool is_accelerator = HIWORD(wParam) == 1;
+            if (!is_accelerator)
+                return 0;
+
+            View_Key key = (View_Key)LOWORD(wParam);
+
+            switch (key)
             {
-                case View_Hotkey::View_Prev:
+                case View_Key::View_Prev:
                     view_prev();
                     break;
-                case View_Hotkey::View_Next:
+                case View_Key::View_Next:
                     view_next();
                     break;
-                case View_Hotkey::View_Show_File_In_Explorer:
+                case View_Key::View_Show_File_In_Explorer:
                 {
                     File_Info* current = get_current_file_info();
                     if (current != nullptr)
@@ -1024,7 +1070,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     }
                     break;
                 }
-                case View_Hotkey::Fast_Quit:
+                case View_Key::Fast_Quit:
                 {
                     shutdown();
                     break;
