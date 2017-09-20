@@ -13,6 +13,11 @@
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 HRESULT adjust_window_rect(int* width, int* height, DWORD window_flags, DWORD window_flags_ex);
 
+
+static const DWORD windowed_display_mode_flags = WS_BORDER | WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW;
+static const DWORD fullscreen_display_mode_flags = WS_POPUP;
+
+
 enum class View_Window_Message : UINT
 {
     Show_After_Entering_Event_Loop = WM_USER + 1,
@@ -23,6 +28,7 @@ enum class View_Menu_Item : int
     None = 0,
     Open_File = 1,
     Quit_App = 2,
+    Change_Display_Mode = 3,
 };
 
 enum class View_Hotkey : int
@@ -31,9 +37,10 @@ enum class View_Hotkey : int
     View_Prev = VK_LEFT,
     View_Next = VK_RIGHT,
     View_Show_File_In_Explorer = VK_RETURN,
+    Fast_Quit = VK_ESCAPE,
 };
 
-bool View_Window::initialize(const View_Window_Init_Params& params)
+bool View_Window::initialize(const View_Window_Init_Params& params, String command_line)
 {
     if (initialized)
         return true;
@@ -78,12 +85,11 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
 
     // Adjust window size
     const DWORD style_flags_ex = 0;
-    const DWORD style_flags    = WS_BORDER | WS_CLIPSIBLINGS | WS_OVERLAPPEDWINDOW;
 
     int window_width = params.window_client_area_width;
     int window_height = params.window_client_area_height;
 
-    hr = adjust_window_rect(&window_width, &window_height, style_flags, style_flags_ex);
+    hr = adjust_window_rect(&window_width, &window_height, windowed_display_mode_flags, style_flags_ex);
     if (FAILED(hr)) {
         error_box(hr);
         return false;
@@ -109,7 +115,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
             }
             else
             {
-                error_box(L"Unable to get full desktop size.\n");
+                LOG_ERROR(L"Unable to get full desktop size.\n");
             }
 
             int desktop_work_width = monitor_info.rcWork.right - monitor_info.rcMonitor.left;
@@ -122,12 +128,12 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
             }
             else
             {
-                error_box(L"Unable to get desktop work size.\n");
+                LOG_ERROR(L"Unable to get desktop work size.");
             }
         }
         else
         {
-            report_error(L"Unable to get primary monitor info.\n");
+            LOG_LAST_WIN32_ERROR(L"Unable to get primary monitor info.");
         }
     }
 
@@ -146,7 +152,7 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
         style_flags_ex,
         (LPCWSTR)atom,
         L"Image View",
-        style_flags,
+        windowed_display_mode_flags, // @TODO
         window_x,
         window_y,
         window_width,
@@ -168,47 +174,50 @@ bool View_Window::initialize(const View_Window_Init_Params& params)
         return false;
     }
 
-    // Create render target
-    hr = Graphics_Utility::create_hwnd_render_target(hwnd, &g);
-    if (FAILED(hr)) {
-        error_box(hr);
-        return false;
-    }
-    
     // Create view menu
     view_menu = CreatePopupMenu();
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Open_File, L"Open...");
     AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
+    AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Change_Display_Mode, L"Go fullscreen");
+    AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Quit_App, L"Quit");
-
-    // Create default text format
-    hr = dwrite->CreateTextFormat(
-        L"Segoe UI",
-        nullptr,
-        DWRITE_FONT_WEIGHT_NORMAL,
-        DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL,
-        32.0f,
-        L"",
-        &default_text_format);
-    if (FAILED(hr)) {
-        report_error(L"Unable to create text format.\n");
-        return false;
-    }
-
-    hr = g->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), &default_text_foreground_brush);
-    if (FAILED(hr)) {
-        report_error(L"Unable to create text foreground brush.\n");
-        return false;
-    }
 
     UpdateWindow(hwnd);
 
     if (params.show_after_entering_event_loop)
         PostMessageW(hwnd, (UINT)View_Window_Message::Show_After_Entering_Event_Loop, 0, 0);
-
+    
     this->hwnd = hwnd;
     this->wic = params.wic;
+
+    hr = create_graphics_resources();
+    if (FAILED(hr)) {
+        error_box(hr);
+        return false;
+    }
+
+    // Parse command line args
+    int num_args;
+    wchar_t** args;
+    args = CommandLineToArgvW(command_line.data, &num_args);
+
+    // Set default scaling
+    // @TODO: read from settings.
+    set_scaling_mode(Scaling_Mode::Fit_To_Window, 1.0f);
+
+
+
+    if (num_args > 1)
+    {
+        LOG_ERROR(L"More than one arg is not supported.");
+    }
+    else if (num_args == 1)
+    {
+        String first_arg = String::reference_to_const_wchar_t(args[0]);
+
+        if (!String::is_null_or_empty(first_arg))
+            load_path(first_arg);
+    }
 
     return (initialized = true);
 }
@@ -220,9 +229,8 @@ bool View_Window::shutdown()
     safe_release(dwrite);
     safe_release(current_image_direct2d);
     safe_release(decoder);
-    safe_release(g);
-    safe_release(default_text_foreground_brush);
-    safe_release(default_text_format);
+
+    discard_graphics_resources();
 
     DestroyWindow(hwnd);
     hwnd = 0;
@@ -265,30 +273,47 @@ void View_Window::load_path(const String& file_path)
 
     String folder_path;
     hr = File_System_Utility::extract_folder_path(file_path, &folder_path);
-    if (FAILED(hr))
-        __debugbreak();
+    if (FAILED(hr)) {
+        error_box(hr);
+        return;
+    }
 
     Sequence<File_Info> files;
     hr = File_System_Utility::get_folder_files(&files, folder_path, image_filter, nullptr);
-    if (FAILED(hr))
-        __debugbreak();
+    if (FAILED(hr)) {
+        error_box(hr);
+        return;
+    }
+
+    Temporary_Allocator_Guard g;
+    String file_name;
+    if (!File_System_Utility::extract_file_name_from_path(file_path, &file_name, g_temporary_allocator)) {
+        error_box(hr);
+        return;
+    }
 
     current_folder = folder_path;
     current_files = files;
     current_file_index = -1;
-
-    Temporary_Allocator_Guard g;
-    String file_name;
-    if (!File_System_Utility::extract_file_name_from_path(file_path, &file_name, g_temporary_allocator))
-        __debugbreak();
-
-    sort_current_images(Sort_Mode::Date_Created, Sort_Order::Descending);
+    
+    hr = sort_current_images(Sort_Mode::Date_Created, Sort_Order::Descending);
+    if (FAILED(hr)) {
+        current_file_index = 0;
+        error_box(hr);
+        return;
+    }
 
     int index = find_file_info_by_path(file_name);
     if (index == -1)
-        __debugbreak();
+    {
+        LOG_ERROR(L"Unable to find file '%s'\n", file_path.data);
+        current_file_index = 0;
+    }
+    else
+    {
+        current_file_index = index;
+    }
 
-    current_file_index = index;
     view_file_index(index);
 }
 
@@ -323,24 +348,58 @@ void View_Window::view_next()
 void View_Window::view_file_index(int index)
 {
     E_VERIFY(index >= 0);
+
     if (!current_files.is_valid_index(index))
         return;
-
-    release_current_image();
-    current_file_index = index;
+    
+    File_Info* file = &current_files.data[index];
 
     Temporary_Allocator_Guard g;
-    String full_path = get_file_info_absolute_path(current_folder, &current_files.data[current_file_index], g_temporary_allocator);
+    String full_path = get_file_info_absolute_path(current_folder, file, g_temporary_allocator);
     if (String::is_null(full_path))
         __debugbreak();
 
-    IWICBitmapDecoder* decoder = create_decoder_from_file_path(full_path.data);
-    
-    if (decoder == nullptr)
+    IWICBitmapDecoder* decoder = nullptr;
+    HRESULT hr;
+
+    do
+    {
+        hr = create_decoder_from_file_path(full_path, &decoder);
+        if (SUCCEEDED(hr))
+        {
+            break;
+        }
+        else
+        {
+            Temporary_Allocator_Guard g;
+            String_Builder sb{ g_temporary_allocator };
+            sb.begin();
+            sb.append_format(
+                L"Cannot load image \"%s\": \"%s\" (HRESULT: %#010x). Retry?",
+                full_path.data,
+                hresult_to_string(hr),
+                hr);
+            sb.end();
+            // @TODO: bool ignored
+
+            int result;
+            hr = TaskDialog(hwnd, 0, L"Error", L"Image loading error", sb.buffer, TDCBF_RETRY_BUTTON | TDCBF_CANCEL_BUTTON, TD_ERROR_ICON, &result);
+            // @TODO: hresult ignored
+
+            if (result == IDRETRY)
+                continue;
+            else
+                break;
+        }
+    } while (1);
+
+    if (FAILED(hr) || decoder == nullptr)
         return;
 
-    if (set_current_image(decoder))
+    if (set_current_image(decoder)) {
+        current_file_index = index;
         update_view_title();
+    }
 }
 
 void View_Window::update_view_title()
@@ -357,7 +416,7 @@ void View_Window::update_view_title()
     title.begin();
     title.append_format(L"(%i/%i) %s", current_file_index + 1, current_files.count, path);
     if (!title.end())
-        report_error(L"Unable to update title.\n");
+        LOG_ERROR(L"Unable to update title.\n");
     else 
         SetWindowTextW(hwnd, title.buffer);
 }
@@ -377,7 +436,7 @@ bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
     WICPixelFormatGUID pixel_format;
     hr = bitmap_frame->GetPixelFormat(&pixel_format);
     if (FAILED(hr)) {
-        report_error(L"Unable to get pixel format of bitmap frame.\n");
+        LOG_HRESULT_ERROR(hr, L"Unable to get pixel format of bitmap frame.\n");
         return false;
     }
 
@@ -387,7 +446,7 @@ bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
     {
         hr = wic->CreateFormatConverter(&converter);
         if (FAILED(hr)) {
-            report_error(L"Unable to create format converter.\n");
+            LOG_HRESULT_ERROR(hr, L"Unable to create format converter.\n");
             return false;
         }
 
@@ -395,9 +454,9 @@ bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
         actual_source = converter;
     }
 
-    hr = g->CreateBitmapFromWicBitmap(actual_source, &current_image_direct2d);
+    hr = hwnd_target->CreateBitmapFromWicBitmap(actual_source, &current_image_direct2d);
     if (FAILED(hr)) {
-        report_error(L"Unable to create Direct2D bitmap from WIC bitmap.\n");
+        LOG_HRESULT_ERROR(hr, L"Unable to create Direct2D bitmap from WIC bitmap.\n");
         return false;
     }
 
@@ -405,7 +464,9 @@ bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
         converter->Release();
 
     D2D1_SIZE_F image_size = current_image_direct2d->GetSize();
-    resize_window((int)image_size.width, (int)image_size.height, (int)Center_Window | (int)Maximize_If_Too_Big);
+    current_image_size = image_size;
+
+    set_desired_client_size((int)image_size.width, (int)image_size.height);
 
     InvalidateRect(hwnd, nullptr, true);
     bitmap_frame->Release();
@@ -415,14 +476,14 @@ bool View_Window::set_current_image(IWICBitmapDecoder* bitmap_decoder)
 
 bool View_Window::get_client_area(int* width, int* height)
 {
-    if (width == nullptr || height == nullptr)
-        return false;
-
+    E_VERIFY_NULL_R(width, false);
+    E_VERIFY_NULL_R(height, false);
+    
     RECT rect;
     if (!GetClientRect(hwnd, &rect))
         return false;
 
-    *width  = rect.right - rect.left;
+    *width  = rect.right  - rect.left;
     *height = rect.bottom - rect.top;
 
     return true;
@@ -473,10 +534,63 @@ bool View_Window::handle_open_file_action()
     return true;
 }
 
+void View_Window::handle_change_display_mode_menu_item()
+{
+    HRESULT hr;
+
+    switch (display_mode)
+    {
+        case Display_Mode::Windowed:
+        {
+            hr = set_display_mode(Display_Mode::Fullscreen);
+            if (SUCCEEDED(hr))
+            {
+                BOOL result = ModifyMenuW(
+                    view_menu,
+                    (UINT_PTR)View_Menu_Item::Change_Display_Mode,
+                    MF_BYCOMMAND | MF_STRING,
+                    (UINT_PTR)View_Menu_Item::Change_Display_Mode,
+                    L"Exit fullscreen");
+
+                if (!result)
+                    LOG_LAST_WIN32_ERROR(L"Unable to modify view menu");
+            }
+            break;
+        }
+
+        case Display_Mode::Fullscreen:
+        {
+            hr = set_display_mode(Display_Mode::Windowed);
+            if (SUCCEEDED(hr))
+            {
+                BOOL result = ModifyMenuW(
+                    view_menu,
+                    (UINT_PTR)View_Menu_Item::Change_Display_Mode,
+                    MF_BYCOMMAND | MF_STRING,
+                    (UINT_PTR)View_Menu_Item::Change_Display_Mode,
+                    L"Enter fullscreen");
+
+                if (!result)
+                    LOG_LAST_WIN32_ERROR(L"Unable to modify view menu");
+            }
+            break;
+        }
+
+        default:
+        {
+            LOG_ERROR(L"Unknown display mode %d", static_cast<int>(display_mode));
+            return;
+        }
+    }
+
+    if (FAILED(hr))
+        LOG_HRESULT_ERROR(hr, L"Unable to change display mode to %d", static_cast<int>(display_mode));
+}
+
 int View_Window::find_file_info_by_path(const String& path)
 {
     if (String::is_null_or_empty(path))
-        return false;
+        return -1;
 
     for (int i = 0; i < current_files.count; ++i)
     {
@@ -487,6 +601,147 @@ int View_Window::find_file_info_by_path(const String& path)
     }
 
     return -1;
+}
+
+HRESULT View_Window::set_scaling_mode(Scaling_Mode mode, float scaling)
+{
+    if (mode == Scaling_Mode::No_Scaling)
+    {
+        this->scaling_mode = mode;
+        this->scaling = 1.0f;
+
+        InvalidateRect(hwnd, nullptr, false);
+
+        return S_OK;
+    }
+
+    if (mode == Scaling_Mode::Percentage)
+    {
+        E_VERIFY_R(scaling > 0.0f, E_INVALIDARG);
+
+        this->scaling_mode = mode;
+        this->scaling = scaling;
+
+        InvalidateRect(hwnd, nullptr, false);
+
+        return S_OK;
+    }
+
+    if (mode == Scaling_Mode::Fit_To_Window)
+    {
+        this->scaling_mode = mode;
+        this->scaling = 1.0f;
+
+        InvalidateRect(hwnd, nullptr, false);
+
+        return S_OK;
+    }
+
+    // Unknown mode.
+    E_VERIFY_R(false, E_UNEXPECTED);
+}
+
+HRESULT View_Window::set_display_mode(Display_Mode mode)
+{
+    if (this->display_mode == mode)
+        return S_OK;
+
+    if (mode == Display_Mode::Fullscreen)
+    {
+        SetWindowLongPtrW(hwnd, GWL_STYLE, static_cast<LONG>(fullscreen_display_mode_flags));
+        SetWindowPos(hwnd, nullptr, 0, 0, desktop_width, desktop_height, SWP_FRAMECHANGED);
+        ShowWindow(hwnd, SW_SHOW);
+    
+        this->display_mode = mode;
+    
+        return S_OK;
+    }
+    else if (mode == Display_Mode::Windowed)
+    {
+        SetWindowLongPtrW(hwnd, GWL_STYLE, static_cast<LONG>(windowed_display_mode_flags));
+
+        // @TODO: use 'set_desired_size'
+        SetWindowPos(hwnd, nullptr, 0, 0, desktop_work_width, desktop_work_height, SWP_FRAMECHANGED);
+        ShowWindow(hwnd, SW_SHOW);
+
+        this->display_mode = mode;
+
+        return S_OK;
+    }
+
+    LOG_ERROR(L"Unknown display mode %d", static_cast<int>(mode));
+    return E_INVALIDARG;
+}
+
+HRESULT View_Window::draw_current_image()
+{
+    int client_width, client_height;
+    get_client_area(&client_width, &client_height);
+
+    D2D1_SIZE_F image_size = current_image_size;
+
+    if (scaling_mode == Scaling_Mode::Fit_To_Window)
+    {
+        fit_to_window:
+        if (image_size.width > client_width)
+        {
+            float aspect = client_width / image_size.width;
+
+            image_size.width  *= aspect;
+            image_size.height *= aspect;
+        }
+
+        if (image_size.height > client_height)
+        {
+            float aspect = client_height / image_size.height;
+
+            image_size.width  *= aspect;
+            image_size.height *= aspect;
+        }
+    }
+    else if (scaling_mode == Scaling_Mode::Percentage)
+    {
+        image_size.width *= scaling;
+        image_size.height *= scaling;
+    }
+    else if (scaling_mode == Scaling_Mode::No_Scaling)
+    {
+        // Don't do anything.
+    }
+    else
+    {
+        LOG_ERROR(L"Unknown scaling mode %d.", scaling_mode);
+        set_scaling_mode(Scaling_Mode::Fit_To_Window, 1.0f);
+        goto fit_to_window;
+    }
+
+    float img_hw = (int)image_size.width  / 2.0f;
+    float img_hh = (int)image_size.height / 2.0f;
+    float cli_hw = client_width  / 2.0f;
+    float cli_hh = client_height / 2.0f;
+
+    D2D1_RECT_F dest_rect = D2D1::RectF(
+        ceilf(cli_hw - img_hw),
+        ceilf(cli_hh - img_hh),
+        ceilf(cli_hw + img_hw),
+        ceilf(cli_hh + img_hh)
+    );
+
+    hwnd_target->DrawBitmap(current_image_direct2d, dest_rect);
+    draw_current_image_info();
+
+    return S_OK;
+}
+
+HRESULT View_Window::draw_placeholder()
+{
+    default_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    default_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+
+    hwnd_target->DrawTextW(L"Please load image", (int)wcslen(L"Please load image"), default_text_format,
+        client_area_as_rectf(), default_text_foreground_brush);
+
+    return S_OK;
 }
 
 #pragma region Sort functions
@@ -547,7 +802,8 @@ HRESULT View_Window::sort_current_images(Sort_Mode mode, Sort_Order order)
     if (sort_func != nullptr)
         qsort(current_files.data, current_files.count, sizeof(current_files.data[0]), sort_func);
 
-    if (current != nullptr) {
+    if (current != nullptr)
+    {
         for (int i = 0; i < current_files.count; ++i)
         {
             if (&current_files.data[i] == current)
@@ -564,16 +820,12 @@ HRESULT View_Window::sort_current_images(Sort_Mode mode, Sort_Order order)
     return S_OK;
 }
 
-IWICBitmapDecoder* View_Window::create_decoder_from_file_path(const wchar_t* path)
+HRESULT View_Window::create_decoder_from_file_path(const String& file_path, IWICBitmapDecoder** decoder)
 {
-    if (path == nullptr)
-        return nullptr;
+    E_VERIFY_R(!String::is_null_or_empty(file_path), E_INVALIDARG);
+    E_VERIFY_NULL_R(decoder, E_INVALIDARG);
 
-    HRESULT hr;
-    IWICBitmapDecoder* decoder = nullptr;
-
-    hr = wic->CreateDecoderFromFilename(path, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, &decoder);
-    return decoder;
+    return wic->CreateDecoderFromFilename(file_path.data, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder);
 }
 
 int View_Window::enter_message_loop()
@@ -614,7 +866,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int new_width = LOWORD(lParam);
             int new_height = HIWORD(lParam);
 
-            g->Resize(D2D1::SizeU(new_width, new_height));
+            hwnd_target->Resize(D2D1::SizeU(new_width, new_height));
 
             return 0;
         }
@@ -663,8 +915,11 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case View_Menu_Item::Quit_App:
                     this->shutdown();
                     break;
+                case View_Menu_Item::Change_Display_Mode:
+                    handle_change_display_mode_menu_item();
+                    break;
                 default:
-                    __debugbreak(); // Unknown item
+                   E_DEBUGBREAK(); // Unknown item
             }
 
             return 0;
@@ -702,6 +957,11 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     }
                     break;
                 }
+                case View_Hotkey::Fast_Quit:
+                {
+                    shutdown();
+                    break;
+                }
             }
 
             return 0;
@@ -711,51 +971,132 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
+HRESULT View_Window::draw_current_image_info()
+{
+    Temporary_Allocator_Guard g;
+    String_Builder sb{ g_temporary_allocator };
+
+    D2D1_SIZE_F size = current_image_direct2d->GetSize();
+
+    sb.begin();
+    sb.append_format(L"%dx%d", (int)size.width, (int)size.height);
+    if (!sb.end())
+        return E_OUTOFMEMORY;
+
+    // @TODO: read from settings
+    const float shadow_offset = 1.1f;
+    const float margin_left = 4.0f;
+    const float margin_top = 4.0f;
+
+    D2D1_RECT_F area = client_area_as_rectf();
+    area.left += margin_left + shadow_offset;
+    area.top += margin_top + shadow_offset;
+
+    hwnd_target->DrawTextW(sb.buffer, sb.count, image_info_text_format, area, image_info_text_shadow_brush);
+
+    area.left -= shadow_offset;
+    area.top -= shadow_offset;
+
+    hwnd_target->DrawTextW(sb.buffer, sb.count, image_info_text_format, area, image_info_text_brush);
+    
+    return S_OK;
+}
+
 D2D1_RECT_F View_Window::client_area_as_rectf()
 {
     RECT client_area;
     GetClientRect(hwnd, &client_area);
 
-    return D2D1::RectF(0.0f, 0.0f, (float)client_area.right, (float)client_area.bottom);
+    return D2D1::RectF(
+        0.0f,
+        0.0f,
+        static_cast<float>(client_area.right),
+        static_cast<float>(client_area.bottom));
 }
 
-void View_Window::resize_window(int new_width, int new_height, int flags)
+void View_Window::set_desired_client_size(int desired_width, int desired_height)
 {
-    DWORD swp_flags = SWP_NOREDRAW | SWP_NOREPOSITION | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOCOPYBITS;
-    int new_x = 0;
-    int new_y = 0;
+    E_VERIFY(desired_width > 0);
+    E_VERIFY(desired_height > 0);
 
-    WINDOWPLACEMENT window_info = { 0 };
-    GetWindowPlacement(hwnd, &window_info);
+    HRESULT hr;
 
-    if (FAILED(adjust_window_rect(&new_width, &new_height, GetWindowLong(hwnd, GWL_STYLE), GetWindowLong(hwnd, GWL_EXSTYLE))))
-        __debugbreak();
+    if (this->display_mode == Display_Mode::Fullscreen)
+        return;
 
-    if (window_info.showCmd == SW_MAXIMIZE)
-        swp_flags |= SWP_NOSIZE | SWP_NOMOVE;
-
-    if (flags & Center_Window)
+    WINDOWPLACEMENT window_info;
+    window_info.length = sizeof(window_info);
+    if (GetWindowPlacement(hwnd, &window_info))
     {
-        new_x = (desktop_width / 2) - (new_width / 2);
-        new_y = (desktop_height / 2) - (new_height / 2);
-    }
-    else
-    {
-        swp_flags |= SWP_NOMOVE;
+        if (window_info.showCmd == SW_MAXIMIZE)
+            return; // Window is maximized, don't adjust window size.
     }
 
-    if (flags & Maximize_If_Too_Big)
+    int window_width  = desired_width;
+    int window_height = desired_height;
+    
+    hr = adjust_window_rect(&window_width, &window_height, GetWindowLongW(hwnd, GWL_STYLE), GetWindowLongW(hwnd, GWL_EXSTYLE));
+    if (FAILED(hr))
+        return;
+
+    // @TODO: on Windows 10 horizontal borders are 1 px from each side, but
+    // border_horiz is 16 pixels. Also we have 7px gap between taskbar and
+    // window vertically.
+    //int border_horiz = window_width  - desired_width;
+    //int border_verti = window_height - desired_height;
+
+    // Make sure we don't have window out of desktop bounds.
+    if (window_width > desktop_work_width)
     {
-        if (new_width >= desktop_work_width || new_height >= desktop_work_height)
-            ShowWindow(hwnd, SW_MAXIMIZE);
+        float aspect = (float)desktop_work_width / window_width;
+
+        window_width  = static_cast<int>(aspect * window_width);
+        window_height = static_cast<int>(aspect * window_height);
     }
 
-    SetWindowPos(hwnd, 0, new_x, new_y, new_width, new_height, swp_flags);
+    if (window_height > desktop_work_height)
+    {
+        float aspect = (float)desktop_work_height / window_height;
+
+        window_width  = static_cast<int>(aspect * window_width);
+        window_height = static_cast<int>(aspect * window_height);
+    }
+
+    // Calculate window center. Use work size to not clutter the taskbar.
+    int window_x = (desktop_work_width / 2)  - (window_width / 2);
+    int window_y = (desktop_work_height / 2) - (window_height / 2);
+
+    BOOL result;
+    result = SetForegroundWindow(hwnd);
+    if (!result)
+        LOG_LAST_WIN32_ERROR(L"Cannot bring view window to foreground");
+
+    result = SetWindowPos(
+        hwnd,
+        0,
+        window_x,
+        window_y,
+        window_width,
+        window_height,
+        SWP_NOCOPYBITS | SWP_NOZORDER | SWP_NOOWNERZORDER);
+
+    if (!result)
+        LOG_LAST_WIN32_ERROR(L"Cannot set view window position");
 }
 
 void View_Window::error_box(HRESULT hr)
 {
-    error_box(hresult_to_string(hr));
+    String_Builder sb{ g_temporary_allocator };
+    Temporary_Allocator_Guard g;
+
+    sb.begin();
+    sb.append_string(L"Error: ");
+    sb.append_string(hresult_to_string(hr));
+    sb.append_format(L"\n\nHRESULT: %#010x", hr);
+    if (!sb.end())
+        MessageBoxW(0, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
+    else
+        MessageBoxW(0, sb.buffer, L"Error", MB_OK | MB_ICONERROR);
 }
 
 void View_Window::error_box(const wchar_t* message)
@@ -766,7 +1107,6 @@ void View_Window::error_box(const wchar_t* message)
     sb.begin();
     sb.append_string(L"Error: ");
     sb.append_string(message);
-    sb.append_char(L'\0');
     if (!sb.end())
         MessageBoxW(hwnd, L"Got an error, but cannot format it.", L"Error", MB_OK | MB_ICONERROR);
     else
@@ -783,51 +1123,128 @@ File_Info* View_Window::get_current_file_info() const
 
 void View_Window::draw_window()
 {
+    E_VERIFY_NULL(hwnd_target);
+    E_VERIFY_NULL(default_text_format);
+    E_VERIFY_NULL(default_text_foreground_brush);
+
+    int call_num = 0;
+start:
     HRESULT hr = S_OK;
+
+    hwnd_target->BeginDraw();
+    hwnd_target->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
 
     if (current_image_direct2d == nullptr)
     {
-        g->BeginDraw();
-        g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
-
-        default_text_format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        default_text_format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-        g->DrawTextW(L"Please load image", (int)wcslen(L"Please load image"), default_text_format,
-            client_area_as_rectf(), default_text_foreground_brush);
-
-        hr = g->EndDraw();
+        draw_placeholder();
     }
     else
     {
-        int client_width, client_height;
-        get_client_area(&client_width, &client_height);
-
-        D2D1_SIZE_F image_size = current_image_direct2d->GetSize();
-        float img_hw = (int)image_size.width / 2.0f;
-        float img_hh = (int)image_size.height / 2.0f;
-        float cli_hw = client_width / 2.0f;
-        float cli_hh = client_height / 2.0f;
-
-        D2D1_RECT_F dest_rect = D2D1::RectF(
-            ceilf(cli_hw - img_hw),
-            ceilf(cli_hh - img_hh),
-            ceilf(cli_hw + img_hw),
-            ceilf(cli_hh + img_hh)
-        );
-
-        g->BeginDraw();
-        g->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
-
-        g->DrawBitmap(current_image_direct2d, dest_rect);
-
-        hr = g->EndDraw();
+        draw_current_image();
     }
 
-    if (FAILED(hr))
-        __debugbreak();
+    hr = hwnd_target->EndDraw();
+    if (SUCCEEDED(hr))
+    {
+        ValidateRect(hwnd, nullptr);
+    }
+    else
+    {
+        if (call_num >= 3)
+        {
+            LOG_ERROR(L"Unable to recover " __FUNCTIONW__);
+            return;
+        }
 
-    ValidateRect(hwnd, nullptr);
+        if (hr == D2DERR_RECREATE_TARGET)
+        {
+            discard_graphics_resources();
+            hr = create_graphics_resources();
+            if (FAILED(hr))
+            {
+                error_box(hr);
+                return;
+            }
+            else
+            {
+                ++call_num;
+                goto start;
+                return;
+            }
+        }
+        else
+        {
+            error_box(hr);
+            return;
+        }
+    }
+}
+
+HRESULT View_Window::create_graphics_resources()
+{
+    HRESULT hr = S_OK;
+
+    // Create render target
+    hr = Graphics_Utility::create_hwnd_render_target(hwnd, &hwnd_target);
+    if (FAILED(hr))
+        goto fail;
+
+    // Create default text format
+    hr = dwrite->CreateTextFormat(
+        L"Segoe UI", // @TODO: hardcoded
+        nullptr,
+        DWRITE_FONT_WEIGHT_NORMAL,
+        DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL,
+        32.0f,
+        L"",
+        &default_text_format);
+    if (FAILED(hr))
+        goto fail;
+
+    // Create default text brush
+    hr = hwnd_target->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), &default_text_foreground_brush);
+    if (FAILED(hr))
+        goto fail;
+
+    // Create image info text format
+    hr = dwrite->CreateTextFormat(
+        L"Segoe UI",
+        nullptr,
+        DWRITE_FONT_WEIGHT_NORMAL,
+        DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL,
+        20.0f,
+        L"",
+        &image_info_text_format);
+    if (FAILED(hr))
+        goto fail;
+
+    // Create image info text brush
+    hr = hwnd_target->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), &image_info_text_brush);
+    if (FAILED(hr))
+        goto fail;
+
+    // Create image info text shadow brush
+    hr = hwnd_target->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), &image_info_text_shadow_brush);
+    if (FAILED(hr))
+        goto fail;
+
+    return S_OK;
+
+fail:
+    discard_graphics_resources();
+    return hr;
+}
+
+void View_Window::discard_graphics_resources()
+{
+    safe_release(image_info_text_format);
+    safe_release(image_info_text_brush);
+    safe_release(image_info_text_shadow_brush);
+    safe_release(default_text_foreground_brush);
+    safe_release(default_text_format);
+    safe_release(hwnd_target);
 }
 
 LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -857,17 +1274,21 @@ LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 HRESULT adjust_window_rect(int* width, int* height, DWORD window_flags, DWORD window_flags_ex)
 {
-    E_VERIFY_NULL_R(width, E_INVALIDARG);
+    E_VERIFY_NULL_R(width,  E_INVALIDARG);
     E_VERIFY_NULL_R(height, E_INVALIDARG);
 
     RECT size = { 0 };
-    size.right = *width;
+    size.right  = *width;
     size.bottom = *height;
 
     if (!AdjustWindowRectEx(&size, window_flags, false, window_flags_ex))
+    {
+        LOG_LAST_WIN32_ERROR(L"Unable to adjust window rectangle.");
         return HRESULT_FROM_WIN32(GetLastError());
+    }
 
-    *width = size.right - size.left;
+    *width  = size.right  - size.left;
     *height = size.bottom - size.top;
+    
     return S_OK;
 }

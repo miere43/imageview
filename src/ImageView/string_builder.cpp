@@ -109,6 +109,22 @@ bool String_Builder::end(bool append_terminating_null)
     return is_valid;
 }
 
+bool String_Builder::reserve(int required_capacity)
+{
+    E_VERIFY_R(required_capacity >= 0, false);
+    if (capacity >= required_capacity)
+        return true;
+
+    wchar_t* new_buffer = (wchar_t*)allocator->reallocate(buffer, sizeof(wchar_t) * required_capacity);
+    if (new_buffer == nullptr)
+        return false;
+
+    buffer = new_buffer;
+    capacity = required_capacity;
+
+    return true;
+}
+
 bool String_Builder::ensure_capacity(int required_capacity)
 {
     E_VERIFY_R(required_capacity >= 0, false);

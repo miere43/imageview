@@ -5,8 +5,10 @@ ID2D1Factory1* Graphics_Utility::d2d1 = nullptr;
 IDWriteFactory* Graphics_Utility::dwrite = nullptr;
 IWICImagingFactory* Graphics_Utility::wic = nullptr;
 
-bool Graphics_Utility::initialize()
+HRESULT Graphics_Utility::initialize(const wchar_t** out_error_message)
 {
+    E_VERIFY_NULL_R(out_error_message, E_INVALIDARG);
+
     HRESULT hr;
 
     // Initialize Direct2D
@@ -21,30 +23,32 @@ bool Graphics_Utility::initialize()
 
     hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), &options, (void**)&d2d1);
     if (FAILED(hr)) {
-        report_error(L"Unable to create Direct2D factory.\n");
-        return false;
+        *out_error_message = L"Unable to create Direct2D factory";
+        return hr;
     }
 
     // Initialize DirectWrite
     hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)&dwrite);
     if (FAILED(hr)) {
-        report_error(L"Unable to create DirectWrite factory.\n");
+        *out_error_message = L"Unable to create DirectWrite factory";
         goto fail;
     }
 
     // Initialize WIC
     hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
     if (FAILED(hr)) {
-        report_error(L"Unable to create WIC instance.\n");
+        *out_error_message = L"Unable to create WIC instance";
         goto fail;
     }
 
-    return true;
+    return S_OK;
 
 fail:
-    safe_release(dwrite);
+    safe_release(wic);
     safe_release(d2d1);
-    return false;
+    safe_release(dwrite);
+
+    return hr;
 }
 
 bool Graphics_Utility::shutdown()

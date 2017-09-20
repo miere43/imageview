@@ -1,5 +1,6 @@
 #include "com_utility.hpp"
 
+
 const wchar_t * hresult_to_string(HRESULT hr)
 {
 #define VAL(ec, msg) case ec: return L##msg
@@ -16,6 +17,11 @@ const wchar_t * hresult_to_string(HRESULT hr)
         VAL(E_HANDLE, "Handle that is not valid");
         VAL(E_OUTOFMEMORY, "Failed to allocate necessary memory");
         VAL(E_INVALIDARG, "One or more arguments are not valid");
+
+        VAL(0x80070002, "File not found");
+        VAL(0x80070490, "Element not found");
+
+        VAL(OLE_E_WRONGCOMPOBJ, "The versions of COMPOBJ.DLL and OLE2.DLL on your machine are incompatible with each other.");
 
         VAL(__HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE), "Invalid window handle");
 

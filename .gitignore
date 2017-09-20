@@ -3,6 +3,7 @@
 *.vcxproj.user
 *.vcxproj.filters
 *.suo
+*.aps
 src/ImageView/Debug
 src/ImageView/Release
 src/ImageView/x64

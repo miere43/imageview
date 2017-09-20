@@ -154,6 +154,8 @@
     <ClCompile Include="string.cpp" />
     <ClCompile Include="string_builder.cpp" />
     <ClCompile Include="view_window.cpp" />
+    <ClCompile Include="view_window_drop_target.cpp" />
+    <ClCompile Include="windows_utility.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="allocator.hpp" />
@@ -162,6 +164,7 @@
     <ClInclude Include="error.hpp" />
     <ClInclude Include="file_system_utility.hpp" />
     <ClInclude Include="path_utility.hpp" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="sequence.hpp" />
     <ClInclude Include="math.hpp" />
     <ClInclude Include="graphics_utility.hpp" />
@@ -169,6 +172,14 @@
     <ClInclude Include="string.hpp" />
     <ClInclude Include="string_builder.hpp" />
     <ClInclude Include="view_window.hpp" />
+    <ClInclude Include="view_window_drop_target.hpp" />
+    <ClInclude Include="windows_utility.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="ImageView.exe.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ImageView.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

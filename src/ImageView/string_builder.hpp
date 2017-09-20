@@ -25,6 +25,8 @@ struct String_Builder
     bool append_format(const wchar_t* format, ...);
     bool append_format(const wchar_t* format, va_list args);
     bool end(bool append_terminating_null = true);
+
+    bool reserve(int required_capacity);
 private:
     bool ensure_capacity(int required_capacity);
     inline int find_capacity(int cap) { return cap <= 5 ? 10 : cap * 2; }
