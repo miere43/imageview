@@ -13,3 +13,5 @@
 * Add ability to move image around
 * Add ability to scale image with mouse wheel
 * Investigate AdjustWindowRectEx behavior
+* Deprecate hresult_to_string
+* Add drag and drop support
