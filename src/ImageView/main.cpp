@@ -6,6 +6,7 @@
 #include "graphics_utility.hpp"
 #include "file_system_utility.hpp"
 #include "windows_utility.hpp"
+#include "line_reader.hpp"
 
 #pragma comment(lib, "Comctl32.lib")
 

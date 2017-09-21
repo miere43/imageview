@@ -1,9 +1,11 @@
 #include <wchar.h>
 #include <shlobj.h>
+#include <Windows.h>
 
 #include "file_system_utility.hpp"
-#include "error.hpp"
 #include "string.hpp"
+#include "error.hpp"
+#include "defer.hpp"
 
 
 HRESULT File_System_Utility::get_folder_files(
@@ -127,6 +129,39 @@ bool File_System_Utility::extract_file_name_from_path(const String& file_path, S
     *file_name = result;
     return true;
 }
+
+HRESULT File_System_Utility::read_file_contents(const String& file_path, void** data, UINT64* data_size, IAllocator* allocator)
+{
+    E_VERIFY_NULL_R(data, E_INVALIDARG);
+    E_VERIFY_NULL_R(data_size, E_INVALIDARG);
+    E_VERIFY_NULL_R(allocator, E_INVALIDARG);
+
+    HANDLE handle = CreateFileW(file_path.data, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE)
+        return HRESULT_FROM_WIN32(GetLastError());
+    defer(CloseHandle(handle));
+
+    UINT64 file_size;
+    if (!GetFileSizeEx(handle, (LARGE_INTEGER*)&file_size))
+        return HRESULT_FROM_WIN32(GetLastError());
+
+    void* file_data = allocator->allocate(static_cast<size_t>(file_size));
+    if (file_data == nullptr)
+        return E_OUTOFMEMORY;
+
+    DWORD readed = 0;
+    if (!ReadFile(handle, file_data, static_cast<DWORD>(file_size), &readed, nullptr))
+    {
+        allocator->deallocate(file_data);
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    *data = file_data;
+    *data_size = file_size;
+
+    return S_OK;
+}
+
 
 HRESULT File_System_Utility::select_file_in_explorer(const String& file)
 {

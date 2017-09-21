@@ -20,7 +20,7 @@ void Standard_Allocator::deallocate(void* block)
     free(block);
 }
 
-void * Standard_Allocator::reallocate(void * block, size_t new_size)
+void* Standard_Allocator::reallocate(void* block, size_t new_size)
 {
     return realloc(block, new_size);
 }
@@ -28,6 +28,7 @@ void * Standard_Allocator::reallocate(void * block, size_t new_size)
 Temporary_Allocator::Temporary_Allocator(IAllocator* block_allocator)
 {
     E_VERIFY_NULL(block_allocator);
+
     this->block_allocator = block_allocator;
 }
 
@@ -42,11 +43,11 @@ bool Temporary_Allocator::set_size(size_t new_size)
     if (block != nullptr)
     {
         block_allocator->deallocate(block);
-        block = current = max = nullptr;
+        block = current = block_max = nullptr;
     }
 
     block = current = new_block;
-    max = (unsigned char*)block + new_size;
+    block_max = (unsigned char*)block + new_size;
 
     return true;
 }
@@ -63,7 +64,7 @@ void* Temporary_Allocator::allocate(size_t size)
     size_t new_block = (size_t)current + (size_t)current % alignment;
     size_t new_block_end = new_block + size;
 
-    if (new_block_end > (size_t)max)
+    if (new_block_end > (size_t)block_max)
         return nullptr; // @TODO: allocate using standard allocator.
 
     current = (void*)(new_block_end);
@@ -72,10 +73,18 @@ void* Temporary_Allocator::allocate(size_t size)
 
 void* Temporary_Allocator::reallocate(void* block, size_t new_size)
 {
+    if (block == nullptr)
+        return allocate(new_size);
+    
+    E_VERIFY_R(block >= this->block && block < this->block_max, nullptr);
+
+    if ((size_t)block + (size_t)new_size > (size_t)this->block_max)
+        return nullptr;
+
     return block;
 }
 
-void Temporary_Allocator::deallocate(void * block)
+void Temporary_Allocator::deallocate(void* block)
 {
     // I don't care.
 }
@@ -90,7 +99,8 @@ Temporary_Allocator_Guard::Temporary_Allocator_Guard(Temporary_Allocator* alloca
 
 Temporary_Allocator_Guard::~Temporary_Allocator_Guard()
 {
-    if (allocator != nullptr && prev_current_state != nullptr) {
+    if (allocator != nullptr && prev_current_state != nullptr)
+    {
         allocator->current = prev_current_state;
         prev_current_state = nullptr;
     }

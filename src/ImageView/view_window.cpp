@@ -7,6 +7,7 @@
 
 #include "string_builder.hpp"
 #include "view_window.hpp"
+#include "line_reader.hpp"
 #include "defer.hpp"
 #include "error.hpp"
 
@@ -44,19 +45,24 @@ enum class View_Menu_Item : int
 //    Fast_Quit = VK_ESCAPE,
 //};
 
-enum class View_Key : WORD
+enum class View_Shortcut : WORD
 {
     None = 0,
-    View_Prev = 1,
-    View_Next = 2,
-    View_Show_File_In_Explorer = 3,
-    Fast_Quit = 4,
+    View_Prev,
+    View_First,
+    View_Next,
+    View_Last,
+    View_Show_File_In_Explorer,
+    Fast_Quit,
+    Change_Display_Mode
 };
 
 bool View_Window::initialize(const View_Window_Init_Params& params, String command_line)
 {
     if (initialized)
         return true;
+
+    load_and_apply_settings();
 
     // Assign graphics resources
     wic = params.wic;
@@ -223,10 +229,13 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
     // Initialize keyboard accelerator
     {
         static ACCEL accels[] = {
-            { FVIRTKEY, VK_LEFT, (WORD)View_Key::View_Prev },
-            { FVIRTKEY, VK_RIGHT, (WORD)View_Key::View_Next },
-            { FVIRTKEY, VK_RETURN, (WORD)View_Key::View_Show_File_In_Explorer },
-            { FVIRTKEY, VK_ESCAPE, (WORD)View_Key::Fast_Quit },
+            { FVIRTKEY, VK_LEFT, (WORD)View_Shortcut::View_Prev },
+            { FVIRTKEY, VK_RIGHT, (WORD)View_Shortcut::View_Next },
+            { FVIRTKEY | FSHIFT, VK_LEFT, (WORD)View_Shortcut::View_First },
+            { FVIRTKEY | FSHIFT, VK_RIGHT, (WORD)View_Shortcut::View_Last },
+            { FVIRTKEY, VK_RETURN, (WORD)View_Shortcut::View_Show_File_In_Explorer },
+            { FVIRTKEY, VK_ESCAPE, (WORD)View_Shortcut::Fast_Quit },
+            { FVIRTKEY, VK_F11, (WORD)View_Shortcut::Change_Display_Mode },
         };
 
         kb_accel = CreateAcceleratorTableW(accels, ARRAYSIZE(accels));
@@ -269,6 +278,42 @@ bool View_Window::shutdown()
     hwnd = 0;
 
     return true;
+}
+
+void View_Window::load_and_apply_settings()
+{
+    HRESULT hr;
+    char* data  = nullptr;
+    UINT64 size = 0;
+
+    Temporary_Allocator_Guard g;
+    hr = File_System_Utility::read_file_contents(String::reference_to_const_wchar_t(L"D:/sette.txt"), (void**)&data, &size, g_temporary_allocator);
+    
+    if (FAILED(hr))
+    {
+        LOG_HRESULT_ERROR(hr, L"Cannot load settings");
+        return;
+    }
+
+    if (size == 0)
+    {
+        LOG_ERROR(L"Cannot load settings because settings file is empty.");
+        return;
+    }
+
+    if (size > static_cast<UINT64>(INT_MAX))
+    {
+        LOG_ERROR(L"Cannot load settings because file is too big.");
+        return;
+    }
+
+    String_Builder line{ g_temporary_allocator };
+    Line_Reader reader;
+    reader.set_source(data, static_cast<int>(size));
+    reader.set_string_builder(&line);
+
+    while (reader.next_line())
+        debug(line.buffer);
 }
 
 String View_Window::get_file_info_absolute_path(const String& folder, const File_Info* file_info, IAllocator* allocator)
@@ -376,6 +421,22 @@ void View_Window::view_next()
         view_file_index(index);
     else
         view_file_index(current_files.count - index);
+}
+
+void View_Window::view_first()
+{
+    if (current_files.is_empty())
+        return;
+
+    view_file_index(0);
+}
+
+void View_Window::view_last()
+{
+    if (current_files.is_empty())
+        return;
+
+    view_file_index(current_files.count - 1);
 }
 
 void View_Window::view_file_index(int index)
@@ -567,7 +628,7 @@ bool View_Window::handle_open_file_action()
     return true;
 }
 
-void View_Window::handle_change_display_mode_menu_item()
+void View_Window::handle_change_display_mode_action()
 {
     HRESULT hr;
 
@@ -605,6 +666,17 @@ void View_Window::handle_change_display_mode_menu_item()
 
                 if (!result)
                     LOG_LAST_WIN32_ERROR(L"Unable to modify view menu");
+
+                File_Info* current = get_current_file_info();
+
+                if (current != nullptr)
+                {
+                    D2D1_SIZE_F image_size = current_image_direct2d->GetSize();
+                    set_desired_client_size(
+                        static_cast<int>(image_size.width),
+                        static_cast<int>(image_size.height)
+                    );
+                }
             }
             break;
         }
@@ -1021,7 +1093,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     this->shutdown();
                     break;
                 case View_Menu_Item::Change_Display_Mode:
-                    handle_change_display_mode_menu_item();
+                    handle_change_display_mode_action();
                     break;
                 case View_Menu_Item::Copy_Filename_To_Clipboard:
                     handle_copy_filename_to_clipboard_menu_item();
@@ -1048,17 +1120,22 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (!is_accelerator)
                 return 0;
 
-            View_Key key = (View_Key)LOWORD(wParam);
-
+            View_Shortcut key = (View_Shortcut)LOWORD(wParam);
             switch (key)
             {
-                case View_Key::View_Prev:
+                case View_Shortcut::View_Prev:
                     view_prev();
                     break;
-                case View_Key::View_Next:
+                case View_Shortcut::View_Next:
                     view_next();
                     break;
-                case View_Key::View_Show_File_In_Explorer:
+                case View_Shortcut::View_First:
+                    view_first();
+                    break;
+                case View_Shortcut::View_Last:
+                    view_last();
+                    break;
+                case View_Shortcut::View_Show_File_In_Explorer:
                 {
                     File_Info* current = get_current_file_info();
                     if (current != nullptr)
@@ -1070,9 +1147,14 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     }
                     break;
                 }
-                case View_Key::Fast_Quit:
+                case View_Shortcut::Fast_Quit:
                 {
                     shutdown();
+                    break;
+                }
+                case View_Shortcut::Change_Display_Mode:
+                {
+                    handle_change_display_mode_action();
                     break;
                 }
             }

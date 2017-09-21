@@ -126,9 +126,14 @@ struct View_Window
     bool initialize(const View_Window_Init_Params& params, String command_line);
     bool shutdown();
 
+    void load_and_apply_settings();
+
     void load_path(const String& file_path);
+    
     void view_prev();
     void view_next();
+    void view_first();
+    void view_last();
     void view_file_index(int index);
 
     void update_view_title();
@@ -141,7 +146,7 @@ struct View_Window
     
     // Menus
     bool handle_open_file_action();
-    void handle_change_display_mode_menu_item();
+    void handle_change_display_mode_action();
     void handle_copy_filename_to_clipboard_menu_item();
 
     int  find_file_info_by_path(const String& path);

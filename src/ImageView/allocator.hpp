@@ -18,7 +18,7 @@ struct Temporary_Allocator : public IAllocator
 {
     void* block = nullptr;
     void* current = nullptr;
-    void* max = nullptr;
+    void* block_max = nullptr;
     // Allocator used to allocate 'block'.
     IAllocator* block_allocator = nullptr;
 

@@ -29,6 +29,7 @@ struct File_System_Utility
     static bool folder_exists(const String& folder_path);
     static HRESULT extract_folder_path(const String& file_path, String* folder_path, IAllocator* folder_path_allocator = g_standard_allocator);
     static bool extract_file_name_from_path(const String& file_path, String* file_name, IAllocator* allocator = g_standard_allocator);
+    static HRESULT read_file_contents(const String& file_path, void** data, UINT64* data_size, IAllocator* allocator = g_standard_allocator);
 
     // Windows Explorer API
     static HRESULT select_file_in_explorer(const String& file_path);
