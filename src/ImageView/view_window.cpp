@@ -92,7 +92,6 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
         wc.hInstance = hInstance;
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = wndproc_proxy;
-        wc.cbWndExtra = sizeof(this);
         wc.lpszClassName = L"View Image Window"; 
 
         atom = RegisterClassExW(&wc);
@@ -164,9 +163,6 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
     }
 
     // Create window
-    CREATESTRUCT create_struct = { 0 };
-    create_struct.lpCreateParams = this;
-
     HWND hwnd = CreateWindowExW(
         style_flags_ex,
         (LPCWSTR)atom,
@@ -179,17 +175,10 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
         0,
         0,
         hInstance,
-        &create_struct);
+        this);
 
     if (hwnd == 0) {
         error_box(L"Unable to create window.");
-        return false;
-    }
-
-    SetLastError(0);
-    SetWindowLongPtrW(hwnd, 0, (LONG_PTR)this);
-    if (GetLastError() != 0) {
-        error_box(L"Unable to set window data.\n");
         return false;
     }
 
@@ -282,38 +271,49 @@ bool View_Window::shutdown()
 
 void View_Window::load_and_apply_settings()
 {
-    HRESULT hr;
-    char* data  = nullptr;
-    UINT64 size = 0;
+    //HRESULT hr;
+    //char* data  = nullptr;
+    //UINT64 size = 0;
 
-    Temporary_Allocator_Guard g;
-    hr = File_System_Utility::read_file_contents(String::reference_to_const_wchar_t(L"D:/sette.txt"), (void**)&data, &size, g_temporary_allocator);
-    
-    if (FAILED(hr))
-    {
-        LOG_HRESULT_ERROR(hr, L"Cannot load settings");
-        return;
-    }
+    //Temporary_Allocator_Guard g;
+    //hr = File_System_Utility::read_file_contents(String::reference_to_const_wchar_t(L"D:/sette.txt"), (void**)&data, &size, g_temporary_allocator);
 
-    if (size == 0)
-    {
-        LOG_ERROR(L"Cannot load settings because settings file is empty.");
-        return;
-    }
+    //if (FAILED(hr))
+    //{
+    //    LOG_HRESULT_ERROR(hr, L"Cannot load settings");
+    //    return;
+    //}
 
-    if (size > static_cast<UINT64>(INT_MAX))
-    {
-        LOG_ERROR(L"Cannot load settings because file is too big.");
-        return;
-    }
+    //if (size == 0)
+    //{
+    //    LOG_ERROR(L"Cannot load settings because settings file is empty.");
+    //    return;
+    //}
 
-    String_Builder line{ g_temporary_allocator };
-    Line_Reader reader;
-    reader.set_source(data, static_cast<int>(size));
-    reader.set_string_builder(&line);
+    //if (size > static_cast<UINT64>(INT_MAX))
+    //{
+    //    LOG_ERROR(L"Cannot load settings because file is too big.");
+    //    return;
+    //}
 
-    while (reader.next_line())
-        debug(line.buffer);
+    //String_Builder sb{ g_temporary_allocator };
+    //String base_line;
+    //base_line.data = sb.buffer;
+
+    //Line_Reader reader;
+    //reader.set_source(data, static_cast<int>(size));
+    //reader.set_string_builder(&sb);
+
+    //while (reader.next_line())
+    //{
+    //    base_line.count = sb.count;
+    //    if (base_line.count == 0)
+    //        continue;
+    //    if (base_line.starts_with(L';'))
+    //        continue;
+
+    //    String line = base_line.ref_trim();
+    //}
 }
 
 String View_Window::get_file_info_absolute_path(const String& folder, const File_Info* file_info, IAllocator* allocator)
@@ -1007,19 +1007,15 @@ int View_Window::enter_message_loop()
     MSG msg;
     int result;
 
-    run_message_loop = true;
-
-    while (run_message_loop && (result = GetMessageW(&msg, hwnd, 0, 0) != 0))
+    while ((result = GetMessageW(&msg, 0, 0, 0) != 0))
     {
         if (result == -1)
         {
-            __debugbreak();
+            LOG_LAST_WIN32_ERROR(L"Message queue error");
+            E_DEBUGBREAK();
             continue;
         }
 
-        if (msg.message == WM_QUIT)
-            break;
-        
         if (!TranslateAcceleratorW(hwnd, kb_accel, &msg))
         {
             TranslateMessage(&msg);
@@ -1027,7 +1023,7 @@ int View_Window::enter_message_loop()
         }
     }
 
-    return msg.message == WM_QUIT ? (int)msg.wParam : 0;
+    return static_cast<int>(msg.wParam);
 }
 
 LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -1047,16 +1043,9 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             return 0;
         }
-        case WM_CLOSE:
-        {
-            DestroyWindow(hwnd);
-            return 0;
-        }
         case WM_DESTROY:
         {
             PostQuitMessage(0);
-            run_message_loop = false;
-
             return 0;
         }
         case WM_PAINT:
@@ -1185,12 +1174,12 @@ HRESULT View_Window::draw_current_image_info()
 
     D2D1_RECT_F area = client_area_as_rectf();
     area.left += margin_left + shadow_offset;
-    area.top += margin_top + shadow_offset;
+    area.top  += margin_top  + shadow_offset;
 
     hwnd_target->DrawTextW(sb.buffer, sb.count, image_info_text_format, area, image_info_text_shadow_brush);
 
     area.left -= shadow_offset;
-    area.top -= shadow_offset;
+    area.top  -= shadow_offset;
 
     hwnd_target->DrawTextW(sb.buffer, sb.count, image_info_text_format, area, image_info_text_brush);
     
@@ -1448,19 +1437,24 @@ LRESULT __stdcall wndproc_proxy(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     {
         case WM_CREATE:
         {
-            CREATESTRUCTW* create_struct = (CREATESTRUCTW*)lParam;
+            CREATESTRUCTW* create_struct = reinterpret_cast<CREATESTRUCTW*>(lParam);
             if (create_struct == nullptr)
                 return 1;
 
-            View_Window* self = (View_Window*)create_struct->lpCreateParams;
+            View_Window* self = reinterpret_cast<View_Window*>(create_struct->lpCreateParams);
             if (self == nullptr)
+                return 1;
+
+            SetLastError(NO_ERROR);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (GetLastError() != NO_ERROR)
                 return 1;
 
             return self->wndproc(hwnd, msg, wParam, lParam);
         }
     }
 
-    View_Window* self = (View_Window*)GetWindowLongPtr(hwnd, 0);
+    View_Window* self = reinterpret_cast<View_Window*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (self == nullptr)
         return DefWindowProcW(hwnd, msg, wParam, lParam);
 

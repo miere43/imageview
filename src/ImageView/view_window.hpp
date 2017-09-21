@@ -76,7 +76,6 @@ struct View_Window
     const static int Maximize_If_Too_Big = 2;
 
     HWND hwnd = 0;
-    bool run_message_loop = false;
     bool initialized = false;
 
     HACCEL kb_accel = 0;

@@ -20,13 +20,16 @@ struct String
 
     int index_of(wchar_t c) const;
     int last_index_of(wchar_t c) const;
+    bool starts_with(wchar_t c) const;
     bool ends_with(wchar_t c) const;
     bool ends_with(const wchar_t* cstring) const;
-
-    size_t calc_size() const ;
+    
+    size_t calc_size() const;
     size_t calc_size_no_zero_terminator() const;
     //bool copy_data_to_buffer(wchar_t* buffer, size_t buffer_size, )
     String substring(int start, int length = -1, IAllocator* allocator = g_standard_allocator) const;
+
+    String ref_trim() const;
 
     static bool is_null_or_empty(const String& string);
     static bool is_null(const String& string);

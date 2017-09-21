@@ -37,6 +37,14 @@ int String::last_index_of(wchar_t c) const
     return -1;
 }
 
+bool String::starts_with(wchar_t c) const
+{
+    if (is_null_or_empty(*this))
+        return false;
+
+    return data[0] == c;
+}
+
 bool String::ends_with(wchar_t c) const
 {
     if (is_null_or_empty(*this))
@@ -116,6 +124,40 @@ String String::substring(int start, int length, IAllocator* allocator) const
 
     wmemcpy(result.data, &data[start], length);
     result.data[length] = L'\0';
+
+    return result;
+}
+
+String String::ref_trim() const
+{
+    if (is_null_or_empty(*this))
+        return String{ this->data, this->count };
+
+    String result;
+    for (int i = 0; i < count; ++i)
+    {
+        if (this->data[i] == ' ' || this->data[i] == '\t')
+        {
+            continue;
+        }
+        else
+        {
+            result.data  = data  + i;
+            result.count = count - i;
+        }
+    }
+
+    for (int i = result.count - 1; i >= 0; ++i)
+    {
+        if (result.data[i] == ' ' || result.data[i] == '\t')
+        {
+            continue;
+        }
+        else
+        {
+            result.count = i;
+        }
+    }
 
     return result;
 }

@@ -20,8 +20,9 @@
 * Enable DPI-awareness
 * Async loading for large images
 * Don't lock file when it's opened in the view
-* Add 'Enter/exit fullscreen' hotkey (F11)
+* Display current image scaling
 * Actions menu:
 	* Rename
 	* Delete
-* Add file watcher for file change notifications.
+* Add file watcher for file change notifications
+* Add 'Select in Windows Explorer' menu item

@@ -61,11 +61,7 @@ void debug(const wchar_t* format, ...)
         __debugbreak(); // Cannot format error message.
     va_end(args);
 
-#if _DEBUG
     OutputDebugStringW(sb.buffer);
-#else
-    MessageBoxW(0, sb.buffer, L"Unexpected error", MB_ICONERROR);
-#endif
 }
 
 void log_error(const wchar_t* file, int line, const wchar_t* format, ...)
@@ -91,7 +87,7 @@ void log_error(const wchar_t* file, int line, const wchar_t* format, ...)
     OutputDebugStringW(sb.buffer);
 }
 
-void log_hresult_error(const wchar_t * file, int line, HRESULT hr, const wchar_t * format, ...)
+void log_hresult_error(const wchar_t* file, int line, HRESULT hr, const wchar_t* format, ...)
 {
     Temporary_Allocator_Guard g;
     String_Builder sb{ g_temporary_allocator };
