@@ -7,6 +7,7 @@
 #include "file_system_utility.hpp"
 #include "windows_utility.hpp"
 #include "line_reader.hpp"
+#include "pool_allocator.hpp"
 
 #pragma comment(lib, "Comctl32.lib")
 
@@ -21,7 +22,8 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
     HeapSetInformation(0, HeapEnableTerminationOnCorruption, nullptr, 0);
 #endif
 
-    if (!g_temporary_allocator->set_size(32 * 1024)) {
+    if (!g_temporary_allocator->set_size(32 * 1024))
+    {
         display_error_box(L"Unable to initialize temporary allocator.");
         return -1;
     }
@@ -79,9 +81,9 @@ int __stdcall wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCm
     params.d2d1 = Graphics_Utility::d2d1;
     params.dwrite = Graphics_Utility::dwrite;
 
-    params.show_after_entering_event_loop = true;
+    params.show_after_entered_event_loop = true;
 
-    String command_line{ lpCmdLine, (int)wcslen(lpCmdLine) };
+    String command_line{ lpCmdLine, static_cast<int>(wcslen(lpCmdLine)) };
 
     View_Window view;
     if (!view.initialize(params, command_line)) {

@@ -130,10 +130,10 @@ String String::substring(int start, int length, IAllocator* allocator) const
 
 String String::ref_trim() const
 {
+    String result = String{ this->data, this->count };
     if (is_null_or_empty(*this))
-        return String{ this->data, this->count };
+        return result;
 
-    String result;
     for (int i = 0; i < count; ++i)
     {
         if (this->data[i] == ' ' || this->data[i] == '\t')
@@ -144,6 +144,8 @@ String String::ref_trim() const
         {
             result.data  = data  + i;
             result.count = count - i;
+        
+            break;
         }
     }
 
@@ -156,6 +158,8 @@ String String::ref_trim() const
         else
         {
             result.count = i;
+        
+            break;
         }
     }
 

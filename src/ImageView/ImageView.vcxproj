@@ -151,6 +151,7 @@
     <ClCompile Include="line_reader.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="graphics_utility.cpp" />
+    <ClCompile Include="pool_allocator.cpp" />
     <ClCompile Include="string.cpp" />
     <ClCompile Include="string_builder.cpp" />
     <ClCompile Include="view_window.cpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="file_system_utility.hpp" />
     <ClInclude Include="line_reader.hpp" />
     <ClInclude Include="path_utility.hpp" />
+    <ClInclude Include="pool_allocator.hpp" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="sequence.hpp" />
     <ClInclude Include="math.hpp" />

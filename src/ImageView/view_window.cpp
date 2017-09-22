@@ -24,7 +24,7 @@ static const DWORD fullscreen_display_mode_flags = WS_POPUP;
 
 enum class View_Window_Message : UINT
 {
-    Show_After_Entering_Event_Loop = WM_USER + 1,
+    Show_After_Entered_Event_Loop = WM_USER + 1,
 };
 
 enum class View_Menu_Item : int
@@ -34,6 +34,7 @@ enum class View_Menu_Item : int
     Quit_App = 2,
     Change_Display_Mode = 3,
     Copy_Filename_To_Clipboard = 4,
+    Show_Image_Info = 5,
 };
 //
 //enum class View_Hotkey : int
@@ -87,15 +88,16 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
     {
         WNDCLASSEX wc = { 0 };
         wc.cbSize = sizeof(wc);
-        wc.hCursor = LoadCursorW(0, IDC_ARROW);
-        wc.hIcon = LoadIconW(0, IDI_APPLICATION);
-        wc.hInstance = hInstance;
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = wndproc_proxy;
-        wc.lpszClassName = L"View Image Window"; 
+        wc.hInstance = hInstance;
+        wc.hIcon = LoadIconW(0, IDI_APPLICATION);
+        wc.hCursor = LoadCursorW(0, IDC_ARROW);
+        wc.lpszClassName = L"IV";
 
         atom = RegisterClassExW(&wc);
-        if (atom == 0) {
+        if (atom == 0)
+        {
             error_box(L"Unable to register window class.\n");
             return false;
         }
@@ -188,14 +190,18 @@ bool View_Window::initialize(const View_Window_Init_Params& params, String comma
     AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Change_Display_Mode, L"Enter fullscreen");
     AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
+    AppendMenuW(
+        view_menu,
+        MF_STRING | (show_image_info ? MF_CHECKED : MF_UNCHECKED), 
+        (UINT_PTR)View_Menu_Item::Show_Image_Info, L"Show image info");
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Copy_Filename_To_Clipboard, L"Copy filename to clipboard");
     AppendMenuW(view_menu, MF_SEPARATOR, (UINT_PTR)View_Menu_Item::None, nullptr);
     AppendMenuW(view_menu, MF_STRING, (UINT_PTR)View_Menu_Item::Quit_App, L"Quit");
 
     UpdateWindow(hwnd);
 
-    if (params.show_after_entering_event_loop)
-        PostMessageW(hwnd, (UINT)View_Window_Message::Show_After_Entering_Event_Loop, 0, 0);
+    if (params.show_after_entered_event_loop)
+        PostMessageW(hwnd, (UINT)View_Window_Message::Show_After_Entered_Event_Loop, 0, 0);
     
     this->hwnd = hwnd;
     this->wic = params.wic;
@@ -628,6 +634,23 @@ bool View_Window::handle_open_file_action()
     return true;
 }
 
+void View_Window::handle_show_image_info_action()
+{
+    show_image_info = !show_image_info;
+
+    MENUITEMINFOW info = { 0 };
+    info.cbSize = sizeof(info);
+    info.fMask = MIIM_STATE;
+    info.fState = show_image_info ? MFS_CHECKED : MFS_UNCHECKED;
+    
+    BOOL result = SetMenuItemInfoW(view_menu, (UINT)View_Menu_Item::Show_Image_Info, false, &info);
+
+    if (!result)
+        LOG_LAST_WIN32_ERROR(L"Cannot change 'Show image info' menu item state to %d", (int)show_image_info);
+
+    InvalidateRect(hwnd, nullptr, false);
+}
+
 void View_Window::handle_change_display_mode_action()
 {
     HRESULT hr;
@@ -894,7 +917,9 @@ HRESULT View_Window::draw_current_image()
     );
 
     hwnd_target->DrawBitmap(current_image_direct2d, dest_rect);
-    draw_current_image_info();
+    
+    if (show_image_info)
+        draw_current_image_info();
 
     return S_OK;
 }
@@ -1036,10 +1061,15 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
         case WM_SIZE:
         {
-            int new_width = LOWORD(lParam);
-            int new_height = HIWORD(lParam);
+            if (wParam != SIZE_MINIMIZED)
+            {
+                int new_width  = LOWORD(lParam);
+                int new_height = HIWORD(lParam);
 
-            hwnd_target->Resize(D2D1::SizeU(new_width, new_height));
+                HRESULT hr = hwnd_target->Resize(D2D1::SizeU(new_width, new_height));
+                if (FAILED(hr))
+                    LOG_HRESULT_ERROR(hr, L"Unable to resize render target to %dx%d", new_width, new_height);
+            }
 
             return 0;
         }
@@ -1087,6 +1117,9 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 case View_Menu_Item::Copy_Filename_To_Clipboard:
                     handle_copy_filename_to_clipboard_menu_item();
                     break;
+                case View_Menu_Item::Show_Image_Info:
+                    handle_show_image_info_action();
+                    break;
                 default:
                    E_DEBUGBREAK(); // Unknown item
             }
@@ -1097,7 +1130,7 @@ LRESULT View_Window::wndproc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             return 0;
         }
-        case (UINT)View_Window_Message::Show_After_Entering_Event_Loop:
+        case (UINT)View_Window_Message::Show_After_Entered_Event_Loop:
         {
             draw_window();
             ShowWindow(hwnd, SW_SHOWNORMAL);
@@ -1246,8 +1279,11 @@ void View_Window::set_desired_client_size(int desired_width, int desired_height)
         window_height = static_cast<int>(aspect * window_height);
     }
 
+    //int new_cli_w = window_width  - border_horiz;
+    //int new_cli_h = window_height - border_verti;
+
     // Calculate window center. Use work size to not clutter the taskbar.
-    int window_x = (desktop_work_width / 2)  - (window_width / 2);
+    int window_x = (desktop_work_width  / 2) - (window_width  / 2);
     int window_y = (desktop_work_height / 2) - (window_height / 2);
 
     BOOL result;

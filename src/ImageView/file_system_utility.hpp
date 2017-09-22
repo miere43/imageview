@@ -12,6 +12,7 @@ struct File_Info
     FILETIME date_accessed = { 0 };
     FILETIME date_modified = { 0 };
     unsigned __int64 file_size = 0;
+
     String path;
 };
 

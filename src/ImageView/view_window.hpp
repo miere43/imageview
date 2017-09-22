@@ -7,11 +7,37 @@
 #include "graphics_utility.hpp"
 #include "view_window_drop_target.hpp"
 
+
+struct Image_Data_Source
+{
+    enum Data_Source_Type
+    {
+        Unknown = 0,
+        Folder,
+        User,
+    };
+
+    Data_Source_Type type;
+    union
+    {
+        struct
+        {
+            String folder_path;
+        } f;
+    };
+};
+
+struct Image_Info
+{
+    Image_Data_Source* source = nullptr;
+    String path;
+};
+
 struct View_Window_Init_Params
 {
     // Forwarded from wWinMain
     HINSTANCE hInstance = 0;
-    LPCWSTR lpCmdLine   = nullptr;
+    LPCWSTR lpCmdLine = nullptr;
     int nCmdShow = SW_SHOW;
 
     ID2D1Factory1* d2d1 = nullptr;
@@ -24,7 +50,7 @@ struct View_Window_Init_Params
     int window_client_area_width  = 400;
     int window_client_area_height = 400;
 
-    bool show_after_entering_event_loop = false;
+    bool show_after_entered_event_loop = false;
 };
 
 // Don't change enum values! Used in View_Window::sort_current_images
@@ -72,11 +98,9 @@ struct View_Window
         VWS_Viewing_Image = 1
     };
 
-    const static int Center_Window = 1;
-    const static int Maximize_If_Too_Big = 2;
-
     HWND hwnd = 0;
     bool initialized = false;
+    bool show_image_info = true;
 
     HACCEL kb_accel = 0;
 
@@ -145,6 +169,7 @@ struct View_Window
     
     // Menus
     bool handle_open_file_action();
+    void handle_show_image_info_action();
     void handle_change_display_mode_action();
     void handle_copy_filename_to_clipboard_menu_item();
 
